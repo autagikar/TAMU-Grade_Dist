@@ -5,15 +5,22 @@ from extract import extract  # our PDF parsing function from extract.py
 # Directory containing all downloaded PDFs
 PDF_DIR = "raw_data/pdfs"
 
-# Connection details for the PostgreSQL database running in Docker
-# These match what we set in docker-compose.yml
-DB_CONFIG = {
-    "host": "localhost",    # Docker maps the container's port to localhost
-    "port": 5432,
-    "dbname": "grades",
-    "user": "tamu",
-    "password": "devpassword",
-}
+# If the DATABASE_URL environment variable is set (e.g. when loading into Railway),
+# use it directly. Otherwise fall back to the local Docker config.
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    # psycopg2 can connect using a full URL string directly
+    DB_CONFIG = DATABASE_URL
+else:
+    # Local Docker defaults from docker-compose.yml
+    DB_CONFIG = {
+        "host": "localhost",
+        "port": 5432,
+        "dbname": "grades",
+        "user": "tamu",
+        "password": "devpassword",
+    }
 
 # SQL template for inserting one record into the sections table
 # The %(key)s placeholders are filled in by psycopg2 from each record dict —
@@ -36,7 +43,7 @@ print(f"Found {len(pdfs)} PDFs to process\n")
 
 # Open one database connection and reuse it for all files
 # Opening a new connection per file would be slow — this is much more efficient
-conn = psycopg2.connect(**DB_CONFIG)
+conn = psycopg2.connect(DB_CONFIG) if isinstance(DB_CONFIG, str) else psycopg2.connect(**DB_CONFIG)
 cur = conn.cursor()  # a cursor is the object we use to send SQL commands
 
 total_loaded = 0
