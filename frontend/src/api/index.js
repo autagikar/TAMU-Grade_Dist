@@ -4,10 +4,10 @@
 
 import axios from 'axios'
 
-// All requests go to the FastAPI backend running in Docker on port 8000.
-// The /api prefix matches the router prefix defined in backend/app/routers/sections.py.
+// In production, VITE_API_URL is set as an environment variable on Vercel
+// pointing to the deployed Railway backend. Falls back to localhost for local dev.
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
 })
 
 // Returns a list of matching course codes (e.g. ["CSCE-121", "CSCE-221"])

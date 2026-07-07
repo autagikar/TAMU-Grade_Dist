@@ -1,15 +1,22 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import sections
 
 app = FastAPI(title="TAMU Grade Distribution API")
 
-# CORS (Cross-Origin Resource Sharing) allows the Vue frontend (running on
-# localhost:5173) to make requests to this API (running on localhost:8000)
-# Without this, browsers block cross-origin requests by default
+# CORS (Cross-Origin Resource Sharing) allows the Vue frontend to make requests
+# to this API. Without it, browsers block cross-origin requests by default.
+# In production, FRONTEND_URL is set as an environment variable on Railway
+# pointing to the deployed Vercel frontend. Localhost is kept for local dev.
+origins = [
+    "http://localhost:5173",
+    os.environ.get("FRONTEND_URL", ""),
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite's default dev server port
+    allow_origins=[o for o in origins if o],  # filter out empty strings
     allow_methods=["GET"],
     allow_headers=["*"],
 )
