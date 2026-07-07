@@ -1,0 +1,344 @@
+TAMU GRADE DISTRIBUTION — PYTHON SCRIPTS DOCUMENTATION
+=======================================================
+
+This document explains every Python file in the project in detail: what it does,
+how it works, and why it was written the way it was.
+
+The Python code covers two concerns:
+  1. The SCRAPER — fetches, parses, and loads PDF data into the database
+  2. The BACKEND API — serves data from the database to the Vue frontend
+
+================================================================================
+SCRAPER
+================================================================================
+
+The TAMU grade distribution website publishes PDF reports for each combination
+of year, academic term, and college. The scraper downloads those PDFs and
+extracts the structured data from them.
+
+--------------------------------------------------------------------------------
+scraper/get_college_codes.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  A one-time utility that scrapes the TAMU grade reports website to find all
+  valid college codes (e.g. "EN" for Engineering, "SC" for Science). These codes
+  are needed to build the download URLs.
+
+HOW IT WORKS:
+  1. Fetches the HTML of https://web-as.tamu.edu/gradereports/ using Python's
+     built-in urllib.request library (no third-party HTTP library needed).
+  2. Parses the HTML using Python's built-in HTMLParser class. We subclass it
+     and override three methods:
+       - handle_starttag: detects when we enter the college <select> dropdown
+         and captures the value= attribute from each <option> tag.
+       - handle_endtag: detects when the <select> closes so we stop collecting.
+       - handle_data: captures the visible text inside each <option> tag.
+  3. Prints every (code, name) pair it finds.
+
+WHY THIS APPROACH:
+  We could have hard-coded the college codes, but scraping them means we
+  automatically pick up any new colleges TAMU adds to their system. The parsed
+  list was copied into download_pdfs.py's COLLEGE_CODES constant.
+
+--------------------------------------------------------------------------------
+scraper/inspect_pdf.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  A development/debugging tool used to understand the structure of the PDFs
+  before writing the full parser. It is NOT part of the production pipeline.
+
+HOW IT WORKS:
+  Opens a single PDF file using pdfplumber and prints:
+  1. The raw extracted text from page 1 (to see if the PDF is text-based or
+     scanned — scanned PDFs would need OCR and pdfplumber can't handle them).
+  2. Any tables detected on the page (pdfplumber can detect table borders and
+     return structured rows, but TAMU's PDFs don't have formal table borders so
+     this returns nothing useful — we fall back to text parsing in extract.py).
+
+KEY FINDING:
+  The PDFs are text-based (not scanned), meaning pdfplumber can extract the
+  text directly as a string. This meant we could parse it with regex and
+  string splitting rather than needing a more complex approach.
+
+--------------------------------------------------------------------------------
+scraper/download_pdfs.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Downloads every PDF from the TAMU grade reports website, covering all
+  combinations of year (2021–2026), academic term (Spring/Summer/Fall), and
+  college code.
+
+HOW IT WORKS:
+  1. Defines the list of years, terms, and college codes to try.
+  2. For each combination, builds the download URL:
+       https://web-as.tamu.edu/gradereports/Report?year=2026&term=SPRING&college=EN
+  3. Makes an HTTP GET request using urllib.request (no third-party libraries).
+  4. Validates the response before saving:
+       - Must be larger than 1KB (error pages are small HTML documents)
+       - Must start with the magic bytes "%PDF" (the standard PDF file header)
+     This prevents saving error pages as if they were valid PDFs.
+  5. Writes valid responses to raw_data/pdfs/ using the filename pattern:
+       {year}_{term}_{college}.pdf   e.g. "2026_SPRING_EN.pdf"
+  6. Skips files that already exist, making the script safe to re-run after
+     interruptions without re-downloading everything.
+  7. Waits 0.3 seconds between requests to avoid overloading the TAMU server.
+
+NOT EVERY COMBINATION EXISTS:
+  Not every year/term/college combination has data. For example, some colleges
+  don't offer summer courses, or data doesn't go back as far as 2021 for all
+  colleges. The validation step handles this gracefully by recording "no data"
+  instead of crashing.
+
+OUTPUT:
+  Prints a summary of how many files were downloaded, already existed, or had
+  no data available.
+
+--------------------------------------------------------------------------------
+scraper/extract.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  The core PDF parser. Reads a single PDF file and returns a list of Python
+  dictionaries, one dictionary per section row. This is imported by load_to_db.py.
+
+PDF STRUCTURE:
+  Each page contains a header section and data rows.
+
+  Header lines look like:
+    COLLEGE: ENGINEERING
+    DEPARTMENT: AEROSPACE ENGINEERING
+
+  Data rows look like:
+    AERO-201-500 13 20 4 0 0 37 3.215 0 0 0 0 0 37 TAKACHI TOMITA J
+
+  The tokens (space-separated values) in each data row correspond to:
+    Position 0:     Section ID (e.g. "AERO-201-500")
+    Position 1:     A count
+    Position 2:     B count
+    Position 3:     C count
+    Position 4:     D count
+    Position 5:     F count
+    Position 6:     A-to-F total (sum of A+B+C+D+F)
+    Position 7:     GPA
+    Position 8:     I (Incomplete)
+    Position 9:     S (Satisfactory)
+    Position 10:    U (Unsatisfactory)
+    Position 11:    Q (Dropped)
+    Position 12:    X (Absent from final)
+    Position 13:    Total enrolled
+    Position 14+:   Instructor name (raw format: "LASTNAME FIRSTNAME_INITIAL")
+
+  Each data row is followed by a percentage row which we skip:
+    35.14% 54.05% 10.81% 0.00% 0.00%
+
+KEY FUNCTIONS:
+
+  format_instructor(raw)
+    Converts the raw instructor name format from the PDF to a readable format.
+    The PDF stores names as "LASTNAME FIRST_INITIAL" (e.g. "TAKACHI TOMITA J").
+    This function converts it to "J. Takachi Tomita" by treating the last token
+    as the first initial and title-casing everything.
+
+  parse_section_id(section_id)
+    Splits "AERO-201-500" into ("AERO-201", "500") — course code and section number.
+    This is done by splitting on dashes and treating the last part as the section.
+
+  is_data_row(line)
+    Uses a regular expression to detect if a line is a data row. The pattern
+    checks that the line starts with an uppercase department code, a dash, digits,
+    and then a space followed by a number. This distinguishes data rows from
+    header lines, blank lines, and page numbers.
+
+  is_percentage_row(line)
+    Detects percentage rows (which start with a number followed by "%" like
+    "35.14%"). These are skipped because we already have the raw counts.
+
+  parse_data_row(line, college, department, semester)
+    Splits the line into tokens and maps each position to its field name.
+    GPA validation: if the parsed GPA value is outside 0–4.0, it's stored as
+    None (NULL in the database). This handles rare malformed rows where the
+    tokens are misaligned and would otherwise write garbage GPA values.
+
+  semester_from_filename(filename)
+    Derives the semester string from the filename convention.
+    "2026_SPRING_EN.pdf" → "Spring 2026"
+
+  extract(pdf_path)
+    The main function that ties everything together:
+    1. Opens the PDF using pdfplumber.
+    2. Loops over every page, extracts its text.
+    3. Tracks the current college and department from header lines.
+    4. For each data row, calls parse_data_row() and appends the result.
+    5. Returns the list of all parsed section dictionaries.
+
+--------------------------------------------------------------------------------
+scraper/load_to_db.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Reads every PDF in the raw_data/pdfs/ directory, parses them using extract.py,
+  and bulk-inserts all records into the PostgreSQL database.
+
+HOW IT WORKS:
+  1. Opens a single database connection (reusing it for all files is much more
+     efficient than opening a new connection per PDF).
+  2. Iterates over all PDFs in the directory in sorted order.
+  3. For each PDF, calls extract() to get a list of section dicts.
+  4. Uses psycopg2's executemany() to insert the entire batch in one call.
+     This is faster than calling execute() in a loop because psycopg2 can
+     optimize the round trips to the database.
+  5. Calls conn.commit() after each PDF so that progress is saved even if the
+     script crashes partway through. (Without commit(), all changes would be
+     rolled back if the script fails.)
+  6. Prints progress as each file is processed.
+  7. Closes the cursor and connection when done.
+
+THE INSERT SQL:
+  Uses named placeholders %(key)s which psycopg2 fills from the dictionary
+  returned by extract(). This prevents SQL injection (the values are always
+  treated as data, never as SQL code) and handles Python-to-SQL type conversion
+  automatically (e.g. None becomes NULL).
+
+DATABASE CONNECTION:
+  The connection parameters are hardcoded to match the docker-compose.yml
+  configuration. The backend container uses the DATABASE_URL environment variable
+  instead, but this script runs locally and connects to Docker's exposed port.
+
+================================================================================
+BACKEND API
+================================================================================
+
+The backend is a FastAPI application running inside Docker. It connects to the
+PostgreSQL database and exposes a REST API that the Vue frontend consumes.
+
+--------------------------------------------------------------------------------
+backend/app/database.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Sets up the SQLAlchemy database connection that all API endpoints share.
+
+KEY CONCEPTS:
+
+  DATABASE_URL environment variable:
+    The URL is read from the environment, not hard-coded. In docker-compose.yml,
+    it's set to "postgresql://tamu:devpassword@db:5432/grades". The hostname "db"
+    works because Docker's internal network resolves container names to their
+    IP addresses automatically.
+
+  engine:
+    SQLAlchemy's engine manages the actual database connection pool. All queries
+    go through this engine.
+
+  SessionLocal:
+    A factory that creates new database sessions. Each HTTP request gets its
+    own session via the get_db() dependency.
+
+  get_db():
+    A FastAPI dependency function. FastAPI injects it into route handlers via
+    Depends(get_db). The try/finally pattern guarantees the session is always
+    closed after the request, even if the handler raises an exception.
+    This prevents connection leaks.
+
+--------------------------------------------------------------------------------
+backend/app/models.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Defines the Section SQLAlchemy model — the Python class that maps to the
+  "sections" table in PostgreSQL.
+
+HOW IT WORKS:
+  SQLAlchemy's ORM (Object-Relational Mapper) lets us write Python instead of
+  raw SQL for most queries. Each attribute on the Section class corresponds to
+  a column in the table. The __tablename__ attribute tells SQLAlchemy which
+  table to use.
+
+COLUMN NOTES:
+  - gpa is Numeric (not Float) to avoid floating-point precision issues in storage.
+  - a_to_f is the sum of A+B+C+D+F grades — it's stored separately because TAMU
+    publishes it directly and it's used as the weight for GPA calculations.
+  - q (dropped with Q-drop), i (incomplete), s/u (satisfactory/unsatisfactory),
+    and x (absent from final) are non-letter-grade outcomes tracked separately.
+
+--------------------------------------------------------------------------------
+backend/app/schemas.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Defines the SectionResponse Pydantic model which controls what data the API
+  returns in JSON responses.
+
+HOW IT WORKS:
+  FastAPI uses Pydantic models for both input validation and output serialization.
+  When a route returns a list[SectionResponse], FastAPI automatically:
+  1. Reads data from the SQLAlchemy model attributes.
+  2. Validates and coerces types.
+  3. Serializes to JSON.
+
+  The from_attributes = True config (formerly orm_mode = True in Pydantic v1)
+  tells Pydantic to read values from SQLAlchemy model attributes rather than
+  expecting a plain dictionary.
+
+  Optional fields (gpa, instructor) handle NULL database values gracefully by
+  allowing them to become null in the JSON response.
+
+--------------------------------------------------------------------------------
+backend/app/main.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  The FastAPI application entry point. Sets up CORS middleware and registers
+  the API router.
+
+CORS MIDDLEWARE:
+  CORS (Cross-Origin Resource Sharing) is a browser security feature that blocks
+  JavaScript from making requests to a different origin (domain + port) than the
+  page it's running on. Our Vue frontend runs on localhost:5173 and the API runs
+  on localhost:8000 — these are different origins, so without CORS middleware,
+  every API call from the browser would be blocked.
+
+  The middleware is configured to only allow requests from localhost:5173 using
+  GET methods, which is the minimum permission needed.
+
+--------------------------------------------------------------------------------
+backend/app/routers/sections.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  All API route handlers. Every endpoint the Vue frontend calls is defined here.
+
+ENDPOINTS:
+
+  GET /api/colleges
+    Returns all distinct college names. Used for verifying data loaded correctly.
+    Not consumed by the frontend UI.
+
+  GET /api/departments?college=ENGINEERING
+    Returns distinct department names, optionally filtered by college.
+    Not currently consumed by the frontend.
+
+  GET /api/semesters
+    Returns all distinct semester strings in the database (e.g. "Spring 2026").
+    The frontend sorts these by a custom chronological key after receiving them.
+
+  GET /api/courses/search?q=csce
+    Autocomplete for course codes. Normalizes the query (uppercase, spaces→dashes)
+    before searching so "csce 121" and "CSCE-121" both match.
+    Requires q to be at least 2 characters (enforced by FastAPI's Query validator).
+
+  GET /api/instructors/search?q=smith
+    Autocomplete for instructor names. Does a case-insensitive substring search
+    against the formatted name (e.g. "J. Smith"). Returns only non-empty values.
+
+  GET /api/sections?course=CSCE-121&semester=Spring+2026&instructor=J.+Smith
+    The main data endpoint. Returns all section rows matching the provided filters.
+    At least one of course or instructor is required to prevent returning the
+    full 99k-row table. All three filters are optional independently, but at
+    least one must be present.
+
+    Course codes are normalized on input (same as the search endpoint) so that
+    the frontend can pass "CSCE-121" or "CSCE 121" interchangeably.

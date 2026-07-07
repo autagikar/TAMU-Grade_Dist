@@ -1,0 +1,175 @@
+<script setup>
+import { ref, computed, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useGradesStore } from '@/stores/grades.js'
+
+const store = useGradesStore()
+
+const PAGE_SIZE = 20
+const currentPage = ref(1)
+
+// Reset to page 1 whenever the filtered sections change
+watch(
+  () => store.filteredSections,
+  () => { currentPage.value = 1 },
+)
+
+function semesterSortKey(sem) {
+  const [term, year] = sem.split(' ')
+  const termOrder = { Spring: 1, Summer: 2, Fall: 3 }
+  return parseInt(year) * 10 + (termOrder[term] ?? 0)
+}
+
+// Sort most recent semester first
+const sortedSections = computed(() =>
+  [...store.filteredSections].sort(
+    (a, b) => semesterSortKey(b.semester) - semesterSortKey(a.semester),
+  ),
+)
+
+const totalPages = computed(() => Math.ceil(sortedSections.value.length / PAGE_SIZE))
+const startIndex = computed(() => (currentPage.value - 1) * PAGE_SIZE)
+const endIndex = computed(() => Math.min(startIndex.value + PAGE_SIZE, sortedSections.value.length))
+const paginatedSections = computed(() => sortedSections.value.slice(startIndex.value, endIndex.value))
+
+function prevPage() {
+  if (currentPage.value > 1) currentPage.value--
+}
+function nextPage() {
+  if (currentPage.value < totalPages.value) currentPage.value++
+}
+</script>
+
+<template>
+  <div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Semester</th>
+            <th>Section</th>
+            <th>Instructor</th>
+            <th>GPA</th>
+            <th>A</th>
+            <th>B</th>
+            <th>C</th>
+            <th>D</th>
+            <th>F</th>
+            <th>Q</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="s in paginatedSections" :key="s.id">
+            <td>{{ s.semester }}</td>
+            <td>{{ s.section }}</td>
+            <td>
+              <RouterLink
+                v-if="s.instructor"
+                :to="`/professor?instructor=${encodeURIComponent(s.instructor)}`"
+                class="instructor-link"
+              >{{ s.instructor }}</RouterLink>
+              <span v-else>—</span>
+            </td>
+            <td>{{ s.gpa ?? '—' }}</td>
+            <td>{{ s.a }}</td>
+            <td>{{ s.b }}</td>
+            <td>{{ s.c }}</td>
+            <td>{{ s.d }}</td>
+            <td>{{ s.f }}</td>
+            <td>{{ s.q }}</td>
+            <td>{{ s.total }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      <button :disabled="currentPage === 1" @click="prevPage">&#8592;</button>
+
+      <span class="page-info">
+        {{ startIndex + 1 }}–{{ endIndex }} of {{ sortedSections.length }}
+      </span>
+
+      <button :disabled="currentPage === totalPages" @click="nextPage">&#8594;</button>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+thead tr {
+  background: #5c0000;
+  color: white;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+tbody tr:nth-child(even) {
+  background: #f9f9f9;
+}
+
+tbody tr:hover {
+  background: #f0e8e8;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.pagination button {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pagination button:hover:not(:disabled) {
+  background: #f0e8e8;
+  border-color: #5c0000;
+}
+
+.pagination button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.instructor-link {
+  color: #5c0000;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.instructor-link:hover {
+  text-decoration: underline;
+}
+
+.page-info {
+  font-size: 0.9rem;
+  color: #555;
+  min-width: 120px;
+  text-align: center;
+}
+</style>

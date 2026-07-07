@@ -1,0 +1,449 @@
+TAMU GRADE DISTRIBUTION — VUE FRONTEND DOCUMENTATION
+=====================================================
+
+This document explains every Vue and JavaScript file in the frontend in detail:
+what it does, how it connects to everything else, and why key decisions were made.
+
+================================================================================
+ARCHITECTURE OVERVIEW
+================================================================================
+
+The frontend is a Vue 3 single-page application (SPA) built with Vite.
+
+Key libraries used:
+  - Vue 3 (Composition API with <script setup>)
+  - Vue Router — client-side navigation between pages
+  - Pinia — state management (replaces Vuex in Vue 3)
+  - Axios — HTTP requests to the FastAPI backend
+  - Chart.js + vue-chartjs — bar charts and line charts
+  - chartjs-plugin-datalabels — percentage labels on the grade distribution bar chart
+
+The app has five pages, each with its own view component and Pinia store:
+  /                    → HomeView.vue + grades store
+  /professor           → ProfessorView.vue + professor store
+  /compare             → CompareView.vue + compare store
+  /compare-professor   → CompareProfessorView.vue + compareProfessor store
+  /my-courses          → MyCoursesView.vue + myCourses store
+
+================================================================================
+ENTRY POINT
+================================================================================
+
+--------------------------------------------------------------------------------
+src/main.js
+--------------------------------------------------------------------------------
+Bootstraps the Vue application. Creates the app instance, registers Pinia
+(state management) and Vue Router (navigation), then mounts the app onto the
+<div id="app"> element in index.html.
+
+--------------------------------------------------------------------------------
+src/App.vue
+--------------------------------------------------------------------------------
+The root component. Rendered once and lives for the entire session.
+
+Contains:
+  - A maroon hero banner (<header class="hero">) with the app title and TAMU logo.
+  - <NavBar /> — the navigation bar (always visible on every page).
+  - <RouterView /> — a slot that Vue Router fills in with whichever page component
+    matches the current URL.
+
+Global CSS (not scoped) is defined here because it applies to the entire app:
+  - box-sizing reset
+  - body font and background color
+  - hero banner styles
+
+--------------------------------------------------------------------------------
+src/router/index.js
+--------------------------------------------------------------------------------
+Defines all five routes. Uses createWebHistory which gives clean URLs (/professor
+instead of /#/professor) via the browser's History API. Vite's dev server
+automatically handles serving index.html for all routes.
+
+--------------------------------------------------------------------------------
+src/api/index.js
+--------------------------------------------------------------------------------
+Single place for all HTTP communication with the backend. Uses axios with a
+shared base URL (http://localhost:8000/api) so changing the backend address
+only requires editing one line.
+
+Functions:
+  searchCourses(q)      → GET /courses/search?q=...      autocomplete for courses
+  searchInstructors(q)  → GET /instructors/search?q=...  autocomplete for instructors
+  getSections(...)      → GET /sections?course=...&...   main data fetch
+  getSemesters()        → GET /semesters                 all available semesters
+
+The getSections function uses spread syntax to omit null parameters from the
+query string rather than sending "course=null" to the API.
+
+================================================================================
+PINIA STORES
+================================================================================
+
+Stores are the source of truth for all page state. Components read from stores
+and call store actions — they never fetch data directly.
+
+--------------------------------------------------------------------------------
+src/stores/grades.js  (Course Search)
+--------------------------------------------------------------------------------
+
+STATE:
+  selectedCourse      the course code currently displayed (e.g. "CSCE-121")
+  selectedSemester    optional semester filter
+  selectedInstructor  optional instructor filter
+  sections            all section rows returned by the API for the current filters
+  semesters           list of all semesters (for the dropdown)
+  loading             true while an API request is in flight
+
+ACTIONS:
+  fetchSemesters()    loads the semester list on page mount
+  fetchSections(course, semester)
+    fetches all sections for the given course, optionally filtered by semester.
+    Resets selectedInstructor so instructor filters don't carry over to a new course.
+  clearSections()     resets all state (used by the ✕ clear button)
+
+COMPUTED:
+  filteredSections        sections filtered by selectedInstructor (if set)
+  uniqueInstructors       sorted list of all instructors for the current course
+  gradeTotals             sum of A/B/C/D/F across filtered sections
+  averageGpa              weighted average GPA (weighted by a_to_f count)
+  totalStudents           total enrolled across filtered sections
+  gpaPerSemester          per-semester weighted average GPA (all sections, not filtered)
+  gpaPerSemesterByInstructor
+    grouped per-instructor, per-semester GPA — used for the multi-line trend chart
+    when no instructor filter is selected
+
+NOTE ON SEMESTER SORTING:
+  Semesters like "Spring 2024" are sorted using a numeric key:
+    year * 10 + termOrder[term]   where Spring=1, Summer=2, Fall=3
+  This correctly orders Spring 2024 < Summer 2024 < Fall 2024 < Spring 2025.
+
+NOTE ON WEIGHTED GPA:
+  A simple average of GPA values would be skewed by small sections.
+  Instead, we compute: sum(gpa * a_to_f) / sum(a_to_f)
+  This weights each section's GPA by the number of graded students, so a
+  section with 200 students has proportionally more influence than one with 5.
+
+--------------------------------------------------------------------------------
+src/stores/professor.js  (Professor Lookup)
+--------------------------------------------------------------------------------
+Same structure as grades.js but for a professor rather than a course.
+
+Key differences:
+  - fetchSections(instructor, semester) passes null for course and the instructor
+    name to getSections(), which filters by instructor.
+  - uniqueCourses computed returns all distinct courses the professor has taught.
+  - gpaPerSemester is a single series (not per-instructor) since we're already
+    viewing one professor.
+
+--------------------------------------------------------------------------------
+src/stores/compare.js  (Compare Courses)
+src/stores/compareProfessor.js  (Compare Professors)
+--------------------------------------------------------------------------------
+Both use a "slot" pattern: makeSlot() creates a self-contained reactive object
+with its own state (course/instructor, sections, loading) and computed properties
+(gradeTotals, averageGpa, totalStudents, gpaPerSemester).
+
+The store creates two slots: a (maroon) and b (blue). They are completely
+independent — searching Course A does not affect Course B's state.
+
+This pattern avoids duplicating store code while keeping the state isolated.
+
+compareProfessor.js additionally exposes uniqueCourses on each slot so the
+Compare Professors page can show clickable course tags for each professor.
+
+--------------------------------------------------------------------------------
+src/stores/myCourses.js  (My Courses)
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Manages a user's personal list of saved courses. The list is persisted to
+  localStorage so it survives page refreshes and browser restarts.
+
+KEY DESIGN:
+  courses       reactive array of course name strings, synced to localStorage
+  courseData    reactive object mapping course name → { sections, loading }
+
+  addCourse(name)     adds to courses, writes to localStorage, fetches sections
+  removeCourse(name)  removes from courses, deletes from courseData, writes to localStorage
+  hydrate()           called on mount — re-fetches section data for any courses
+                      already in localStorage (because courseData is not persisted,
+                      only the course names are)
+
+COMPUTED:
+  gpaSeriesByCourse   array of { course, data: [{ semester, avgGpa }] }
+                      used by MyCoursesChart for the multi-line trend chart
+  courseStats         per-course summary stats: avgGpa, totalStudents, sections count,
+                      A/B/C/D/F percentages — used by the summary table
+  overallAvgGpa       single weighted average across ALL saved courses
+  isLoading           true if any course is still being fetched
+
+================================================================================
+COMPONENTS
+================================================================================
+
+Components are reusable pieces of UI. Views compose them together.
+
+--------------------------------------------------------------------------------
+src/components/NavBar.vue
+--------------------------------------------------------------------------------
+The navigation bar rendered on every page (via App.vue).
+
+Structure: two dropdown tab groups (Courses, Professors) + one direct link (My Courses).
+The dropdowns are implemented purely with CSS hover (no JavaScript needed).
+
+Active state: computed properties check route.path against known route lists
+and apply a white border-bottom to the active tab.
+
+The dropdown chevron (▾) is added via a CSS ::after pseudo-element only on tabs
+that have class nav-group, not on the direct nav-direct link.
+
+--------------------------------------------------------------------------------
+src/components/CourseSearch.vue
+--------------------------------------------------------------------------------
+Autocomplete search input for courses on the Course Search page.
+
+Uses a debounce pattern: the API is only called 300ms after the user stops typing,
+preventing a request for every keystroke.
+
+Accepts a 'preset' prop: when the URL contains ?course=CSCE-121, the parent
+(HomeView) passes this as preset, and a watcher triggers the search automatically.
+
+--------------------------------------------------------------------------------
+src/components/InstructorSearch.vue
+--------------------------------------------------------------------------------
+Same as CourseSearch but for instructor names. Uses searchInstructors() and
+calls store.fetchSections(instructor) on selection.
+
+--------------------------------------------------------------------------------
+src/components/CompareSearch.vue
+src/components/CompareProfessorSearch.vue
+--------------------------------------------------------------------------------
+Standalone autocomplete inputs used on the compare pages. Unlike CourseSearch
+and InstructorSearch, these don't directly call a store — they emit a 'select'
+event with the selected value and let the parent view call the store.
+
+This makes them reusable: the same component can be used for both the A and B slots.
+
+Key detail: mousedown.prevent on suggestion items prevents the input's blur event
+from firing before the click is registered, which would cause the dropdown to
+disappear before the selection is captured.
+
+--------------------------------------------------------------------------------
+src/components/GradeChart.vue
+--------------------------------------------------------------------------------
+Bar chart showing A/B/C/D/F as percentages of graded students.
+
+IMPORTANT — ChartDataLabels registration:
+  chartjs-plugin-datalabels is passed as a :plugins prop directly on the <Bar>
+  component rather than being registered globally with ChartJS.register().
+  This is intentional. If registered globally, it also applies to line charts and
+  causes a "partially erased" visual artifact — white padding appears around
+  every data point dot. Passing it per-chart prevents this bleed-over.
+
+Tooltip shows both the percentage AND the raw student count for context.
+
+--------------------------------------------------------------------------------
+src/components/GpaTrendChart.vue
+--------------------------------------------------------------------------------
+Line chart for GPA trends over time. Handles two modes via props:
+
+  Single-line mode (professor view):
+    :gpa-per-semester="[{ semester, avgGpa }]"
+    Draws one maroon line.
+
+  Multi-line mode (course view, no instructor filter):
+    :instructor-data="[{ instructor, data: [{ semester, avgGpa }] }]"
+    Draws one line per instructor, color-cycling through a 10-color palette.
+
+Y-axis auto-scaling:
+  Computes min/max from all data points, adds 0.2 padding on each side, and
+  clamps to 0–4.3. The max of 4.3 is intentional — it gives visual headroom
+  above 4.0, and the tick callback hides the "4.3" label so users only see
+  round numbers.
+
+Tick formatting: +v.toFixed(2) rounds to 2 decimal places and drops trailing
+zeros (e.g. 3.20 → 3.2) to avoid floating-point strings like "3.0000000004".
+
+--------------------------------------------------------------------------------
+src/components/CompareBarChart.vue
+--------------------------------------------------------------------------------
+Grouped bar chart for the compare pages. Shows A/B/C/D/F side by side for two
+courses or professors. Slot A is always maroon, slot B always blue.
+
+Values are converted to percentages of graded students (same approach as GradeChart).
+ChartDataLabels is intentionally not used here — the bars are too narrow to fit labels.
+
+--------------------------------------------------------------------------------
+src/components/CompareTrendChart.vue
+--------------------------------------------------------------------------------
+Two-line trend chart for the compare pages.
+
+The X-axis is the union of both datasets' semesters (sorted chronologically).
+Both lines share the same axis, so gaps appear where one course has data and
+the other doesn't. spanGaps: true draws a line through those gaps.
+
+Reuses the same auto-scaling Y-axis logic as GpaTrendChart.
+
+--------------------------------------------------------------------------------
+src/components/MyCoursesChart.vue
+--------------------------------------------------------------------------------
+Multi-line trend chart for the My Courses page. Accepts a 'series' prop with
+N courses, drawing one line per course. Colors cycle through a 10-color palette
+starting with maroon.
+
+Logic is identical to GpaTrendChart's multi-line mode, but generalized to accept
+any number of series rather than exactly one per instructor.
+
+--------------------------------------------------------------------------------
+src/components/SectionsTable.vue
+--------------------------------------------------------------------------------
+Paginated table of section rows for the Course Search page.
+
+Shows 20 rows per page (most recent semester first). Pagination controls use
+← and → arrows with a "1–20 of 150" counter in the middle.
+
+Instructor names are clickable RouterLinks to /professor?instructor=NAME,
+enabling deep-linking to the Professor Lookup page for any instructor.
+
+Watches store.filteredSections (not sections) so that changing the instructor
+filter resets the page to 1.
+
+--------------------------------------------------------------------------------
+src/components/ProfessorSectionsTable.vue
+--------------------------------------------------------------------------------
+Same as SectionsTable but for the Professor Lookup page.
+
+Course codes are clickable RouterLinks to /?course=COURSE-CODE, enabling
+deep-linking back to Course Search for any course.
+
+================================================================================
+VIEWS
+================================================================================
+
+Views are page-level components — one per route. They compose stores and
+components together into a complete page.
+
+--------------------------------------------------------------------------------
+src/views/HomeView.vue  (Course Search — /)
+--------------------------------------------------------------------------------
+The main course search page.
+
+On mount: calls store.fetchSemesters() to populate the dropdown.
+
+Deep-linking: reads route.query.course and passes it as a preset prop to
+CourseSearch. When you navigate to /?course=CSCE-121, the search runs automatically.
+
+Controls:
+  - CourseSearch autocomplete
+  - Semester dropdown (shown once a course is selected)
+  - Instructor dropdown (shown when the course has multiple instructors)
+
+Add to My Courses button:
+  Appears once a course is loaded. Shows "+ Add to My Courses" by default,
+  or "✓ Saved" if the course is already in the myCourses store. Clicking the
+  saved state removes the course.
+
+Charts:
+  - GradeChart: uses filteredSections data so it updates when instructor is filtered
+  - GpaTrendChart: switches between multi-line mode (all instructors) and single-line
+    mode (selected instructor) based on whether selectedInstructor is set
+
+--------------------------------------------------------------------------------
+src/views/ProfessorView.vue  (Professor Lookup — /professor)
+--------------------------------------------------------------------------------
+Deep-linking: reads route.query.instructor, URL-decodes it, and passes it as a
+preset prop to InstructorSearch. The SectionsTable on the Course Search page
+links to this page with ?instructor=NAME.
+
+Displays:
+  - Stats row: Professor name, Avg GPA, Total Students, Sections Taught, Unique Courses
+  - Courses list: all distinct courses taught, each linking to /?course=COURSE
+  - GradeChart: the professor's overall grade distribution
+  - GpaTrendChart (single-line mode): GPA trend over time
+  - ProfessorSectionsTable: paginated section breakdown
+
+The GPA trend is only shown when there are at least 2 data points, because a
+single-point trend line isn't meaningful.
+
+--------------------------------------------------------------------------------
+src/views/CompareView.vue  (Compare Courses — /compare)
+src/views/CompareProfessorView.vue  (Compare Professors — /compare-professor)
+--------------------------------------------------------------------------------
+Both pages follow the same layout:
+
+  1. Two search inputs side by side with a "vs" divider
+  2. Stats panel (shown as soon as either slot has a course/professor loaded)
+  3. Grade distribution comparison bar chart (shown when BOTH slots have data)
+  4. GPA trend comparison line chart (shown when BOTH slots have data)
+
+CompareProfessorView additionally shows each professor's course tags with
+color-coded themes (maroon for A, blue for B), linking to Course Search.
+
+Both pages reuse CompareBarChart and CompareTrendChart, which accept generic
+label props — they work for both courses and professors without modification.
+
+--------------------------------------------------------------------------------
+src/views/MyCoursesView.vue  (My Courses — /my-courses)
+--------------------------------------------------------------------------------
+Displays the user's saved course list.
+
+On mount: calls store.hydrate() which re-fetches section data for all courses
+already in localStorage. Section data is not persisted — only the course name
+list is — so we must re-fetch on every session.
+
+Elements:
+  - "+ Add Course" button (top right) — links to Course Search
+  - Course chips — each chip shows the course name (links to Course Search)
+    and a ✕ button that removes the course
+  - MyCoursesChart — multi-line GPA trend (shown once data is loaded)
+  - Course Summary table — one row per course showing avg GPA, students, sections,
+    and A/B/C/D/F percentages
+  - Overall Average row — weighted GPA across all saved courses combined
+
+EMPTY STATE:
+  If no courses are saved, shows a message directing the user to Course Search
+  to add their first course.
+
+================================================================================
+CROSS-PAGE NAVIGATION (DEEP LINKING)
+================================================================================
+
+Several links jump between pages with pre-filled data:
+
+  Course Search → Professor Lookup:
+    Instructor names in SectionsTable are RouterLinks to /professor?instructor=NAME
+
+  Professor Lookup → Course Search:
+    Course tags in ProfessorView are RouterLinks to /?course=COURSE-CODE
+    Course codes in ProfessorSectionsTable are also RouterLinks to /?course=COURSE-CODE
+
+  My Courses → Course Search:
+    Course chips and course links in MyCoursesView link to /?course=COURSE-CODE
+
+Each destination page reads the relevant URL query parameter using useRoute()
+and passes it as a preset prop to the search component, which watches it and
+triggers the fetch automatically.
+
+================================================================================
+CHART.JS NOTES
+================================================================================
+
+ChartDataLabels (percentage labels on bars):
+  Registered per-chart via :plugins="[ChartDataLabels]" instead of globally.
+  If registered globally, it applies to all Chart.js instances including line charts
+  and creates a "partially erased" look by drawing white padding around every dot.
+
+Y-axis auto-scaling for line charts:
+  All line charts compute min/max from their data, add 0.2 padding, and clamp
+  to 0–4.3. The 4.3 ceiling gives visual headroom above 4.0 without showing "4.3"
+  as a label (hidden by the tick callback).
+
+Tick label formatting:
+  +v.toFixed(2) is used instead of just v for Y-axis ticks. Chart.js sometimes
+  generates tick values like 3.0000000000004 due to floating-point arithmetic
+  in the scale calculation. toFixed(2) rounds these to clean values like "3" or "3.2".
+
+Semester labels on X-axis:
+  Stored as human-readable strings ("Spring 2026") and sorted using:
+    year * 10 + { Spring: 1, Summer: 2, Fall: 3 }[term]
+  This ensures correct chronological order without parsing dates.

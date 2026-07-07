@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tamu
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: grades
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://tamu:devpassword@db:5432/grades
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

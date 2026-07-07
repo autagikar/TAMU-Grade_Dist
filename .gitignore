@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# PDFs and extracted data (large files, re-downloadable)
+scraper/raw_data/
+raw_data/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Environment / secrets
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
