@@ -37,35 +37,60 @@ INSERT_SQL = """
     )
 """
 
+# Set this to a filename to skip everything before it (useful after a mid-run crash).
+# Set to None to process all files from the beginning.
+START_FROM = None
+END_AT = None
+
 # Get a sorted list of all PDF files in the directory
-pdfs = sorted(f for f in os.listdir(PDF_DIR) if f.endswith(".pdf"))
+all_pdfs = sorted(f for f in os.listdir(PDF_DIR) if f.endswith(".pdf"))
+if START_FROM and END_AT:
+    pdfs = [f for f in all_pdfs if START_FROM <= f <= END_AT]
+elif START_FROM:
+    pdfs = [f for f in all_pdfs if f >= START_FROM]
+else:
+    pdfs = all_pdfs
 print(f"Found {len(pdfs)} PDFs to process\n")
 
 # Open one database connection and reuse it for all files
-# Opening a new connection per file would be slow — this is much more efficient
 conn = psycopg2.connect(DB_CONFIG) if isinstance(DB_CONFIG, str) else psycopg2.connect(**DB_CONFIG)
-cur = conn.cursor()  # a cursor is the object we use to send SQL commands
+cur = conn.cursor()
 
 total_loaded = 0
+failed = 0
 
 for filename in pdfs:
     path = os.path.join(PDF_DIR, filename)
 
-    # extract() parses the PDF and returns a list of dicts, one per section row
     records = extract(path)
 
     if records:
-        # executemany runs the INSERT for every record in the list in one batch
-        cur.executemany(INSERT_SQL, records)
-        # commit() saves this batch to the DB — without this, changes are temporary
-        conn.commit()
-        total_loaded += len(records)
-        print(f"  {filename}: {len(records)} records")
+        try:
+            # Insert all records for this PDF as one batch
+            cur.executemany(INSERT_SQL, records)
+            conn.commit()
+            total_loaded += len(records)
+            print(f"  {filename}: {len(records)} records")
+        except Exception as e:
+            failed += 1
+            print(f"  {filename}: FAILED — {e}")
+            # Try to roll back; if the connection dropped, reconnect so the
+            # remaining files can still be processed
+            try:
+                conn.rollback()
+            except Exception:
+                print("  Connection lost — reconnecting...")
+                try:
+                    conn = psycopg2.connect(DB_CONFIG) if isinstance(DB_CONFIG, str) else psycopg2.connect(**DB_CONFIG)
+                    cur = conn.cursor()
+                    print("  Reconnected.")
+                except Exception as reconnect_err:
+                    print(f"  FATAL: could not reconnect — {reconnect_err}")
+                    break
     else:
         print(f"  {filename}: no records extracted")
 
-# Always close the cursor and connection when done to free up DB resources
 cur.close()
 conn.close()
 
-print(f"\nDone. Total records loaded: {total_loaded}")
+print(f"\nDone. Loaded: {total_loaded} records | Failed batches: {failed}")
