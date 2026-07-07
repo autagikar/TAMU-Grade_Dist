@@ -41,6 +41,16 @@ function makeSlot() {
     state.sections.reduce((sum, s) => sum + s.total, 0),
   )
 
+  // Professor score 0–100: 70% weighted average GPA + 30% percentage of A grades
+  const professorScore = computed(() => {
+    if (!averageGpa.value) return null
+    const totalGraded = state.sections.reduce((sum, s) => sum + s.a_to_f, 0)
+    if (totalGraded === 0) return null
+    const totalA = state.sections.reduce((sum, s) => sum + s.a, 0)
+    const aPercent = totalA / totalGraded
+    return Math.min(100, Math.round((parseFloat(averageGpa.value) / 4.0) * 70 + aPercent * 30))
+  })
+
   // All unique courses this professor has taught, sorted alphabetically.
   // Displayed as clickable tags on the compare page linking back to Course Search.
   const uniqueCourses = computed(() => {
@@ -77,7 +87,7 @@ function makeSlot() {
     state.loading = false
   }
 
-  return { state, gradeTotals, averageGpa, totalStudents, uniqueCourses, gpaPerSemester, fetch, clear }
+  return { state, gradeTotals, averageGpa, totalStudents, professorScore, uniqueCourses, gpaPerSemester, fetch, clear }
 }
 
 export const useCompareProfessorStore = defineStore('compareProfessor', () => {

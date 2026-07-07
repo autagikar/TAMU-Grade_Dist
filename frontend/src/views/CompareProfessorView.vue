@@ -9,6 +9,7 @@ import { useCompareProfessorStore } from '@/stores/compareProfessor.js'
 import CompareProfessorSearch from '@/components/CompareProfessorSearch.vue'
 import CompareBarChart from '@/components/CompareBarChart.vue'
 import CompareTrendChart from '@/components/CompareTrendChart.vue'
+import ScoreRing from '@/components/ScoreRing.vue'
 
 // Both course comparison charts are reused here — they accept generic label/data
 // props so they work for professors just as well as for courses.
@@ -56,6 +57,10 @@ const store = useCompareProfessorStore()
               <span class="stat-value a">{{ store.a.uniqueCourses.length }}</span>
               <span class="stat-label">Courses</span>
             </div>
+            <div class="stat">
+              <ScoreRing :score="store.a.professorScore" :size="56" />
+              <span class="stat-label">Score</span>
+            </div>
           </div>
           <!-- Clickable course tags for professor A — links to Course Search -->
           <div v-if="store.a.uniqueCourses.length" class="courses-list">
@@ -89,6 +94,10 @@ const store = useCompareProfessorStore()
             <div class="stat">
               <span class="stat-value b">{{ store.b.uniqueCourses.length }}</span>
               <span class="stat-label">Courses</span>
+            </div>
+            <div class="stat">
+              <ScoreRing :score="store.b.professorScore" :size="56" />
+              <span class="stat-label">Score</span>
             </div>
           </div>
           <!-- Clickable course tags for professor B — links to Course Search (blue variant) -->
@@ -214,6 +223,7 @@ const store = useCompareProfessorStore()
   text-align: center;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2px;
 }
 

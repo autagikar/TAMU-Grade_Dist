@@ -76,6 +76,19 @@ export const useProfessorStore = defineStore('professor', () => {
   // Total students enrolled across all sections (including non-graded like Q/W).
   const totalStudents = computed(() => sections.value.reduce((sum, s) => sum + s.total, 0))
 
+  // Professor score from 0–100 using a weighted formula:
+  //   70% based on average GPA (scaled to 0–4.0)
+  //   30% based on percentage of students who received an A
+  // Returns null if there is not enough data to compute.
+  const professorScore = computed(() => {
+    if (!averageGpa.value) return null
+    const totalGraded = sections.value.reduce((sum, s) => sum + s.a_to_f, 0)
+    if (totalGraded === 0) return null
+    const totalA = sections.value.reduce((sum, s) => sum + s.a, 0)
+    const aPercent = totalA / totalGraded
+    return Math.min(100, Math.round((parseFloat(averageGpa.value) / 4.0) * 70 + aPercent * 30))
+  })
+
   // All unique course codes this professor has ever taught (sorted alphabetically),
   // displayed as clickable links on the professor page.
   const uniqueCourses = computed(() => {
@@ -110,6 +123,7 @@ export const useProfessorStore = defineStore('professor', () => {
     gradeTotals,
     averageGpa,
     totalStudents,
+    professorScore,
     uniqueCourses,
     gpaPerSemester,
     fetchSemesters,

@@ -15,9 +15,11 @@ import InstructorSearch from '@/components/InstructorSearch.vue'
 import GradeChart from '@/components/GradeChart.vue'
 import GpaTrendChart from '@/components/GpaTrendChart.vue'
 import ProfessorSectionsTable from '@/components/ProfessorSectionsTable.vue'
+import ScoreRing from '@/components/ScoreRing.vue'
 
 const route = useRoute()
 const store = useProfessorStore()
+
 
 // Read the instructor name from the URL query param (e.g. ?instructor=J.%20Smith).
 // InstructorSearch watches this prop and triggers a fetch if it's set on mount.
@@ -74,6 +76,10 @@ onMounted(() => {
           <div class="stat">
             <span class="stat-value">{{ store.uniqueCourses.length }}</span>
             <span class="stat-label">Unique Courses</span>
+          </div>
+          <div class="stat score-stat">
+            <ScoreRing :score="store.professorScore" />
+            <span class="stat-label">Estimated Professor Score</span>
           </div>
         </div>
 
@@ -157,7 +163,7 @@ select {
 
 .stat {
   flex: 1;
-  min-width: 120px;
+  min-width: 100px;
   background: white;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -165,6 +171,7 @@ select {
   text-align: center;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 4px;
 }
 
@@ -179,6 +186,7 @@ select {
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  margin-top: auto;
 }
 
 .courses-list {
