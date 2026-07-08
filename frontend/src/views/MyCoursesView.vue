@@ -58,6 +58,7 @@ onMounted(() => store.hydrate())
                     <th>C%</th>
                     <th>D%</th>
                     <th>F%</th>
+                    <th>Q-Drop%</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -75,13 +76,14 @@ onMounted(() => store.hydrate())
                     <td>{{ row.cPercent !== null ? row.cPercent + '%' : '—' }}</td>
                     <td>{{ row.dPercent !== null ? row.dPercent + '%' : '—' }}</td>
                     <td>{{ row.fPercent !== null ? row.fPercent + '%' : '—' }}</td>
+                    <td>{{ row.qPercent !== null ? row.qPercent + '%' : '—' }}</td>
                   </tr>
                 </tbody>
                 <tfoot>
                   <tr class="total-row">
                     <td>Overall Average</td>
                     <td class="gpa-cell">{{ store.overallAvgGpa ?? '—' }}</td>
-                    <td colspan="7"></td>
+                    <td colspan="8"></td>
                   </tr>
                 </tfoot>
               </table>
@@ -96,7 +98,7 @@ onMounted(() => store.hydrate())
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f9f9f9;
+  background: var(--bg);
 }
 
 .content {
@@ -116,16 +118,16 @@ onMounted(() => store.hydrate())
   padding: 10px 18px;
   font-size: 0.9rem;
   font-weight: 600;
-  border: 2px solid #5c0000;
+  border: 2px solid var(--primary);
   border-radius: 6px;
-  background: white;
-  color: #5c0000;
+  background: var(--surface);
+  color: var(--primary-text);
   text-decoration: none;
   transition: background 0.15s, color 0.15s;
 }
 
 .add-btn:hover {
-  background: #5c0000;
+  background: var(--primary);
   color: white;
 }
 
@@ -139,14 +141,14 @@ onMounted(() => store.hydrate())
 .course-chip {
   display: flex;
   align-items: center;
-  background: white;
-  border: 1px solid #d9c0c0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
 }
 
 .course-name {
-  color: #5c0000;
+  color: var(--primary-text);
   font-weight: 600;
   font-size: 0.9rem;
   text-decoration: none;
@@ -160,8 +162,8 @@ onMounted(() => store.hydrate())
 .remove-btn {
   background: none;
   border: none;
-  border-left: 1px solid #e8d8d8;
-  color: #aaa;
+  border-left: 1px solid var(--border);
+  color: var(--text-muted);
   padding: 7px 10px;
   cursor: pointer;
   font-size: 0.8rem;
@@ -170,13 +172,13 @@ onMounted(() => store.hydrate())
 }
 
 .remove-btn:hover {
-  color: #5c0000;
-  background: #f0e8e8;
+  color: var(--primary-text);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
 }
 
 .card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
@@ -185,7 +187,7 @@ onMounted(() => store.hydrate())
 .card h2 {
   margin: 0 0 20px;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text);
 }
 
 .table-wrapper {
@@ -196,10 +198,11 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  color: var(--text);
 }
 
 thead tr {
-  background: #5c0000;
+  background: var(--primary);
   color: white;
 }
 
@@ -209,22 +212,31 @@ th, td {
   white-space: nowrap;
 }
 
-tbody tr:nth-child(even) { background: #f9f9f9; }
-tbody tr:hover { background: #f0e8e8; }
+tbody tr {
+  background: var(--surface);
+}
+
+tbody tr:nth-child(even) {
+  background: var(--bg);
+}
+
+tbody tr:hover {
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
 
 tfoot .total-row {
-  background: #f5f0f0;
-  border-top: 2px solid #d9c0c0;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+  border-top: 2px solid var(--border);
   font-weight: 700;
 }
 
 .gpa-cell {
-  color: #5c0000;
+  color: var(--primary-text);
   font-weight: 600;
 }
 
 .course-link {
-  color: #5c0000;
+  color: var(--primary-text);
   text-decoration: none;
   font-weight: 600;
 }
@@ -235,13 +247,13 @@ tfoot .total-row {
 
 .status {
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
   margin-top: 48px;
 }
 
 .empty {
   text-align: center;
-  color: #aaa;
+  color: var(--text-muted);
   margin-top: 64px;
   font-size: 1.1rem;
   line-height: 2;
@@ -252,7 +264,7 @@ tfoot .total-row {
 }
 
 .link {
-  color: #5c0000;
+  color: var(--primary-text);
   font-weight: 600;
 }
 </style>

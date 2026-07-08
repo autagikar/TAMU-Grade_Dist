@@ -5,14 +5,16 @@
 <script setup>
 import { RouterLink, useRoute } from 'vue-router'
 import { computed } from 'vue'
+import { useThemeStore } from '@/stores/theme.js'
 
 const route = useRoute()
+const theme = useThemeStore()
 
 // Mark the Courses tab as active when on any course-related page
-const coursesActive = computed(() => ['/', '/compare'].includes(route.path))
+const coursesActive = computed(() => ['/', '/compare', '/course-rankings'].includes(route.path))
 
 // Mark the Professors tab as active when on any professor-related page
-const professorsActive = computed(() => ['/professor', '/compare-professor'].includes(route.path))
+const professorsActive = computed(() => ['/professor', '/compare-professor', '/rankings'].includes(route.path))
 
 // Mark My Courses as active when on the my-courses page
 const myCoursesActive = computed(() => route.path === '/my-courses')
@@ -26,6 +28,7 @@ const myCoursesActive = computed(() => route.path === '/my-courses')
       <div class="dropdown">
         <RouterLink to="/" class="dropdown-link">Course Search</RouterLink>
         <RouterLink to="/compare" class="dropdown-link">Compare Courses</RouterLink>
+        <RouterLink to="/course-rankings" class="dropdown-link">Course Rankings</RouterLink>
       </div>
     </div>
 
@@ -35,6 +38,7 @@ const myCoursesActive = computed(() => route.path === '/my-courses')
       <div class="dropdown">
         <RouterLink to="/professor" class="dropdown-link">Professor Lookup</RouterLink>
         <RouterLink to="/compare-professor" class="dropdown-link">Compare Professors</RouterLink>
+        <RouterLink to="/rankings" class="dropdown-link">Department Rankings</RouterLink>
       </div>
     </div>
 
@@ -42,6 +46,11 @@ const myCoursesActive = computed(() => route.path === '/my-courses')
     <RouterLink to="/my-courses" class="nav-tab nav-direct" :class="{ active: myCoursesActive }">
       My Courses
     </RouterLink>
+
+    <!-- Dark mode toggle pushed to the far right -->
+    <button class="theme-toggle" @click="theme.toggle" :title="theme.isDark ? 'Switch to light mode' : 'Switch to dark mode'">
+      {{ theme.isDark ? '☀' : '☾' }}
+    </button>
   </nav>
 </template>
 
@@ -52,7 +61,24 @@ const myCoursesActive = computed(() => route.path === '/my-courses')
   gap: 4px;
   padding: 0 40px;
   position: relative;
-  z-index: 50; /* ensure dropdown sits above page content */
+  z-index: 50;
+  align-items: stretch;
+}
+
+.theme-toggle {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 12px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.theme-toggle:hover {
+  color: white;
 }
 
 /* A nav-group is the wrapper div that holds the tab label + dropdown */

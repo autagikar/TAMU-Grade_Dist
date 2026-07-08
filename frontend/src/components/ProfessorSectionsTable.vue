@@ -90,10 +90,11 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  color: var(--text);
 }
 
 thead tr {
-  background: #5c0000;
+  background: var(--primary);
   color: white;
 }
 
@@ -103,8 +104,17 @@ th, td {
   white-space: nowrap;
 }
 
-tbody tr:nth-child(even) { background: #f9f9f9; }
-tbody tr:hover { background: #f0e8e8; }
+tbody tr {
+  background: var(--surface);
+}
+
+tbody tr:nth-child(even) {
+  background: var(--bg);
+}
+
+tbody tr:hover {
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
 
 .pagination {
   display: flex;
@@ -115,23 +125,24 @@ tbody tr:hover { background: #f0e8e8; }
 }
 
 .pagination button {
-  background: white;
-  border: 1px solid #ccc;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 16px;
   font-size: 1.1rem;
   cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s;
 }
 
 .pagination button:hover:not(:disabled) {
-  background: #f0e8e8;
-  border-color: #5c0000;
+  border-color: var(--primary);
 }
 
 .pagination button:disabled { opacity: 0.35; cursor: default; }
 
 .course-link {
-  color: #5c0000;
+  color: var(--primary-text);
   text-decoration: none;
   font-weight: 500;
 }
@@ -142,7 +153,7 @@ tbody tr:hover { background: #f0e8e8; }
 
 .page-info {
   font-size: 0.9rem;
-  color: #555;
+  color: var(--text-muted);
   min-width: 120px;
   text-align: center;
 }

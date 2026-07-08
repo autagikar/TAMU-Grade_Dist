@@ -7,6 +7,8 @@ import CourseSearch from '@/components/CourseSearch.vue'
 import GradeChart from '@/components/GradeChart.vue'
 import GpaTrendChart from '@/components/GpaTrendChart.vue'
 import SectionsTable from '@/components/SectionsTable.vue'
+import ShareButton from '@/components/ShareButton.vue'
+import GradePredictor from '@/components/GradePredictor.vue'
 
 const route = useRoute()
 const store = useGradesStore()
@@ -73,13 +75,16 @@ onMounted(() => {
               <span class="stat-label">Sections</span>
             </div>
           </div>
-          <button
-            class="save-btn"
-            :class="{ saved: isSaved }"
-            @click="isSaved ? myCoursesStore.removeCourse(store.selectedCourse) : myCoursesStore.addCourse(store.selectedCourse)"
-          >
-            {{ isSaved ? '✓ Saved' : '+ Add to My Courses' }}
-          </button>
+          <div class="header-actions">
+            <ShareButton />
+            <button
+              class="save-btn"
+              :class="{ saved: isSaved }"
+              @click="isSaved ? myCoursesStore.removeCourse(store.selectedCourse) : myCoursesStore.addCourse(store.selectedCourse)"
+            >
+              {{ isSaved ? '✓ Saved' : '+ Add to My Courses' }}
+            </button>
+          </div>
         </div>
 
         <!-- Grade Distribution -->
@@ -106,6 +111,14 @@ onMounted(() => {
           <h2>Section Breakdown</h2>
           <SectionsTable />
         </section>
+
+        <!-- Grade Predictor — only when an instructor is selected -->
+        <GradePredictor
+          v-if="store.selectedInstructor && store.filteredSections.length"
+          :sections="store.filteredSections"
+          :course="store.selectedCourse"
+          :instructor="store.selectedInstructor"
+        />
       </div>
 
       <!-- No results -->
@@ -124,7 +137,7 @@ onMounted(() => {
 <style scoped>
 .home {
   min-height: 100vh;
-  background: #f9f9f9;
+  background: var(--bg);
 }
 
 .content {
@@ -144,9 +157,10 @@ onMounted(() => {
 select {
   padding: 10px 14px;
   font-size: 1rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 6px;
-  background: white;
+  background: var(--input-bg);
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -166,64 +180,73 @@ select {
   flex: 1;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .save-btn {
   align-self: center;
   padding: 10px 18px;
   font-size: 0.9rem;
   font-weight: 600;
   border-radius: 6px;
-  border: 2px solid #5c0000;
-  background: white;
-  color: #5c0000;
+  border: 2px solid var(--primary);
+  background: var(--surface);
+  color: var(--primary-text);
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
 }
 
 .save-btn:hover {
-  background: #5c0000;
+  background: var(--primary);
   color: white;
 }
 
 .save-btn.saved {
-  background: #5c0000;
+  background: var(--primary);
   color: white;
 }
 
 .save-btn.saved:hover {
-  background: #3a0000;
-  border-color: #3a0000;
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
 }
 
 .stat {
   flex: 1;
-  min-width: 120px;
-  background: white;
-  border: 1px solid #e0e0e0;
+  min-width: 100px;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 4px;
 }
 
 .stat-value {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #5c0000;
+  color: var(--primary-text);
 }
 
 .stat-label {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  margin-top: auto;
 }
 
 .card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
@@ -232,18 +255,18 @@ select {
 .card h2 {
   margin: 0 0 20px;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text);
 }
 
 .status {
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
   margin-top: 48px;
 }
 
 .empty {
   text-align: center;
-  color: #aaa;
+  color: var(--text-muted);
   margin-top: 64px;
   font-size: 1.1rem;
 }

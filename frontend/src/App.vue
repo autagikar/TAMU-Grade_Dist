@@ -28,7 +28,32 @@ import NavBar from '@/components/NavBar.vue'
 </template>
 
 <style>
-/* Global reset — applied to every element in the app -->
+/* ── CSS custom properties ── */
+:root {
+  --primary:      #5c0000;
+  --primary-dark: #3a0000;
+  --primary-text: #5c0000;   /* maroon text in light mode */
+  --bg:           #f9f9f9;
+  --surface:      #ffffff;
+  --border:       #e0e0e0;
+  --text:         #222222;
+  --text-muted:   #888888;
+  --input-bg:     #ffffff;
+  --input-border: #cccccc;
+}
+
+:root.dark {
+  --primary-text: #d4d4d4;   /* light grey replaces maroon text in dark mode */
+  --bg:           #121212;
+  --surface:      #1e1e1e;
+  --border:       #333333;
+  --text:         #e8e8e8;
+  --text-muted:   #9e9e9e;
+  --input-bg:     #2a2a2a;
+  --input-border: #444444;
+}
+
+/* Global reset */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -36,15 +61,22 @@ import NavBar from '@/components/NavBar.vue'
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #222;
-  background: #f9f9f9;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  transition: background 0.2s, color 0.2s;
+}
+
+/* Global input / select dark mode */
+input, select, textarea {
+  background: var(--input-bg);
+  color: var(--text);
+  border-color: var(--input-border);
 }
 
 /* Hero banner styles are global (not scoped) because they live in the root component */
 .hero {
-  background: #5c0000;
+  background: var(--primary);
   color: white;
   padding: 28px 40px;
 }

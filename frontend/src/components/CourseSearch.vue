@@ -90,22 +90,25 @@ input {
   flex: 1;
   padding: 10px 14px;
   font-size: 1rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 6px;
   outline: none;
+  background: var(--input-bg);
+  color: var(--text);
 }
 
 input:focus {
-  border-color: #5c0000;
+  border-color: var(--primary);
 }
 
 button {
   padding: 0 14px;
-  background: #eee;
-  border: 1px solid #ccc;
+  background: var(--border);
+  border: 1px solid var(--input-border);
   border-radius: 6px;
   cursor: pointer;
   font-size: 1rem;
+  color: var(--text);
 }
 
 .suggestions {
@@ -113,23 +116,25 @@ button {
   top: 100%;
   left: 0;
   right: 0;
-  background: white;
-  border: 1px solid #ccc;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-top: none;
   border-radius: 0 0 6px 6px;
   list-style: none;
   margin: 0;
   padding: 0;
   z-index: 10;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .suggestions li {
   padding: 10px 14px;
   cursor: pointer;
+  color: var(--text);
 }
 
 .suggestions li:hover {
-  background: #f5f5f5;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  color: var(--primary-text);
 }
 </style>

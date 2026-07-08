@@ -16,6 +16,7 @@ import GradeChart from '@/components/GradeChart.vue'
 import GpaTrendChart from '@/components/GpaTrendChart.vue'
 import ProfessorSectionsTable from '@/components/ProfessorSectionsTable.vue'
 import ScoreRing from '@/components/ScoreRing.vue'
+import ShareButton from '@/components/ShareButton.vue'
 
 const route = useRoute()
 const store = useProfessorStore()
@@ -55,6 +56,11 @@ onMounted(() => {
 
       <!-- Results — shown once sections have been loaded -->
       <div v-else-if="store.sections.length">
+        <!-- Share button -->
+        <div class="share-row">
+          <ShareButton />
+        </div>
+
         <!-- Summary stats row -->
         <div class="stats">
           <div class="stat">
@@ -62,7 +68,18 @@ onMounted(() => {
             <span class="stat-label">Professor</span>
           </div>
           <div class="stat">
-            <span class="stat-value">{{ store.averageGpa }}</span>
+            <div class="gpa-with-trend">
+              <span class="stat-value">{{ store.averageGpa }}</span>
+              <span
+                v-if="store.gpaTrend"
+                class="trend-arrow"
+                :class="store.gpaTrend.direction"
+                :title="store.gpaTrend.delta ? `${store.gpaTrend.delta} vs last semester` : 'No significant change'"
+              >{{ store.gpaTrend.label }}</span>
+            </div>
+            <span v-if="store.gpaTrend?.delta" class="trend-delta" :class="store.gpaTrend.direction">
+              {{ store.gpaTrend.delta }} vs last sem
+            </span>
             <span class="stat-label">Avg GPA</span>
           </div>
           <div class="stat">
@@ -111,6 +128,25 @@ onMounted(() => {
           <h2>Section Breakdown</h2>
           <ProfessorSectionsTable />
         </section>
+
+        <!-- Similar professors from the same department -->
+        <section v-if="store.similarProfessors.length" class="card">
+          <h2>Similar Professors</h2>
+          <div class="similar-grid">
+            <RouterLink
+              v-for="prof in store.similarProfessors"
+              :key="prof.instructor"
+              :to="`/professor?instructor=${encodeURIComponent(prof.instructor)}`"
+              class="similar-card"
+            >
+              <ScoreRing :score="prof.score" :size="56" />
+              <div class="similar-info">
+                <span class="similar-name">{{ prof.instructor }}</span>
+                <span class="similar-gpa">GPA {{ prof.avg_gpa }}</span>
+              </div>
+            </RouterLink>
+          </div>
+        </section>
       </div>
 
       <!-- Shown when a search was run but returned no results -->
@@ -129,6 +165,7 @@ onMounted(() => {
 <style scoped>
 .page {
   min-height: 100vh;
+  background: var(--bg);
 }
 
 .content {
@@ -148,10 +185,17 @@ onMounted(() => {
 select {
   padding: 10px 14px;
   font-size: 1rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 6px;
-  background: white;
+  background: var(--input-bg);
+  color: var(--text);
   cursor: pointer;
+}
+
+.share-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 
 .stats {
@@ -164,8 +208,8 @@ select {
 .stat {
   flex: 1;
   min-width: 100px;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
   text-align: center;
@@ -178,15 +222,82 @@ select {
 .stat-value {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #5c0000;
+  color: var(--primary-text);
 }
 
 .stat-label {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: auto;
+}
+
+.gpa-with-trend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+
+.trend-arrow {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.trend-arrow.up   { color: #2e7d32; }
+.trend-arrow.down { color: #c62828; }
+.trend-arrow.flat { color: #888; }
+
+.trend-delta {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.trend-delta.up   { color: #2e7d32; }
+.trend-delta.down { color: #c62828; }
+.trend-delta.flat { color: #888; }
+
+.similar-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.similar-card {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  background: var(--surface);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.similar-card:hover {
+  border-color: var(--primary-text);
+}
+
+.similar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.similar-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.similar-gpa {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .courses-list {
@@ -199,7 +310,7 @@ select {
 
 .courses-label {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;
@@ -207,9 +318,9 @@ select {
 }
 
 .course-tag {
-  background: #f0e8e8;
-  color: #5c0000;
-  border: 1px solid #d9c0c0;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary-text);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 0.85rem;
@@ -219,13 +330,12 @@ select {
 }
 
 .course-tag:hover {
-  background: #e0d0d0;
-  border-color: #5c0000;
+  border-color: var(--primary-text);
 }
 
 .card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
@@ -234,18 +344,18 @@ select {
 .card h2 {
   margin: 0 0 20px;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text);
 }
 
 .status {
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
   margin-top: 48px;
 }
 
 .empty {
   text-align: center;
-  color: #aaa;
+  color: var(--text-muted);
   margin-top: 64px;
   font-size: 1.1rem;
 }

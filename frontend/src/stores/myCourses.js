@@ -88,8 +88,8 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
           : null
         const totalStudents = sections.reduce((sum, s) => sum + s.total, 0)
         const grades = sections.reduce(
-          (acc, s) => { acc.a += s.a; acc.b += s.b; acc.c += s.c; acc.d += s.d; acc.f += s.f; return acc },
-          { a: 0, b: 0, c: 0, d: 0, f: 0 },
+          (acc, s) => { acc.a += s.a; acc.b += s.b; acc.c += s.c; acc.d += s.d; acc.f += s.f; acc.q += s.q; return acc },
+          { a: 0, b: 0, c: 0, d: 0, f: 0, q: 0 },
         )
         const gradedTotal = grades.a + grades.b + grades.c + grades.d + grades.f
         return {
@@ -102,6 +102,8 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
           cPercent: gradedTotal ? +((grades.c / gradedTotal) * 100).toFixed(1) : null,
           dPercent: gradedTotal ? +((grades.d / gradedTotal) * 100).toFixed(1) : null,
           fPercent: gradedTotal ? +((grades.f / gradedTotal) * 100).toFixed(1) : null,
+          // Q-drop uses total enrolled as denominator since Q students never received a grade
+          qPercent: totalStudents ? +((grades.q / totalStudents) * 100).toFixed(1) : null,
         }
       })
   })

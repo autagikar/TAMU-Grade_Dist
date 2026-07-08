@@ -4,7 +4,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getSections, getSemesters } from '@/api/index.js'
+import { getSections, getSemesters, getDepartmentRankings } from '@/api/index.js'
 
 // Converts a semester string like "Spring 2024" into a numeric sort key
 // so semesters can be sorted chronologically (older = smaller number).
@@ -21,6 +21,7 @@ export const useProfessorStore = defineStore('professor', () => {
   const sections = ref([])              // all section rows for this instructor
   const semesters = ref([])             // all semesters in the DB (for dropdown)
   const loading = ref(false)
+  const similarProfessors = ref([])     // up to 3 professors from the same dept with similar scores
 
   // --- actions ---
 
@@ -32,20 +33,40 @@ export const useProfessorStore = defineStore('professor', () => {
   }
 
   // Fetches all sections for the given instructor (optionally filtered by semester).
-  // Passing null for course tells getSections to filter by instructor only.
+  // After sections load, kicks off a background fetch for similar professors.
   async function fetchSections(instructor, semester = null) {
     loading.value = true
     selectedInstructor.value = instructor
     selectedSemester.value = semester
+    similarProfessors.value = []
     const res = await getSections(null, semester, instructor)
     sections.value = res.data
     loading.value = false
+    // Fetch similar professors in the background (don't block the main load)
+    fetchSimilarProfessors()
+  }
+
+  // Finds up to 3 professors in the same department with the closest professor score.
+  async function fetchSimilarProfessors() {
+    const department = sections.value[0]?.department
+    if (!department || professorScore.value === null) return
+    try {
+      const res = await getDepartmentRankings(department)
+      const currentScore = professorScore.value
+      similarProfessors.value = res.data
+        .filter((p) => p.instructor !== selectedInstructor.value && p.score !== null)
+        .sort((a, b) => Math.abs(a.score - currentScore) - Math.abs(b.score - currentScore))
+        .slice(0, 3)
+    } catch {
+      similarProfessors.value = []
+    }
   }
 
   function clearSections() {
     sections.value = []
     selectedInstructor.value = null
     selectedSemester.value = null
+    similarProfessors.value = []
   }
 
   // --- computed ---
@@ -96,6 +117,23 @@ export const useProfessorStore = defineStore('professor', () => {
     return [...set].sort()
   })
 
+  // Compares the most recent semester's GPA against the previous one to determine
+  // if the professor's grades have been trending up, down, or staying flat.
+  // Returns null when fewer than 2 semesters of data exist.
+  const gpaTrend = computed(() => {
+    const sems = gpaPerSemester.value
+    if (sems.length < 2) return null
+    const latest = parseFloat(sems[sems.length - 1].avgGpa)
+    const prev = parseFloat(sems[sems.length - 2].avgGpa)
+    const delta = latest - prev
+    if (Math.abs(delta) < 0.05) return { direction: 'flat', label: '→' }
+    return {
+      direction: delta > 0 ? 'up' : 'down',
+      label: delta > 0 ? '↑' : '↓',
+      delta: (delta > 0 ? '+' : '') + delta.toFixed(2),
+    }
+  })
+
   // Average GPA per semester — used for the single-line GPA trend chart on the
   // professor page. Semesters are sorted oldest → newest so the line reads left to right.
   const gpaPerSemester = computed(() => {
@@ -124,8 +162,10 @@ export const useProfessorStore = defineStore('professor', () => {
     averageGpa,
     totalStudents,
     professorScore,
+    gpaTrend,
     uniqueCourses,
     gpaPerSemester,
+    similarProfessors,
     fetchSemesters,
     fetchSections,
     clearSections,

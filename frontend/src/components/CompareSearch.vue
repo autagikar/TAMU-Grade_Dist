@@ -78,14 +78,16 @@ function onBlur() {
   width: 100%;
   padding: 10px 14px;
   font-size: 1rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 6px;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #5c0000;
+  border-color: var(--primary);
 }
 
 .suggestions {
@@ -93,8 +95,8 @@ function onBlur() {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: white;
-  border: 1px solid #ccc;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   list-style: none;
   margin: 0;
@@ -102,17 +104,18 @@ function onBlur() {
   max-height: 220px;
   overflow-y: auto;
   z-index: 100;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .suggestions li {
   padding: 10px 14px;
   cursor: pointer;
   font-size: 0.95rem;
+  color: var(--text);
 }
 
 .suggestions li:hover {
-  background: #f0e8e8;
-  color: #5c0000;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  color: var(--primary-text);
 }
 </style>

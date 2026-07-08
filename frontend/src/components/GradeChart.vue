@@ -1,95 +1,106 @@
-<!-- Bar chart showing the grade distribution (A/B/C/D/F) as percentages.
-     Accepts a gradeTotals prop with raw counts and converts them to percentages
-     for display. Each bar is labeled with its percentage using chartjs-plugin-datalabels.
-
-     IMPORTANT: ChartDataLabels is passed as a :plugins prop directly on the <Bar>
-     component rather than being registered globally via ChartJS.register(). This is
-     intentional — globally registered datalabels bleeds into line charts and causes
-     a "partially erased" visual artifact around data points. -->
+<!-- Grade distribution as a smooth bell curve area chart.
+     Grades are ordered F → A (left to right) so a typical class peaks toward
+     the right and takes on a natural bell or right-skewed curve shape.
+     The fill under the curve is a semi-transparent maroon area. -->
 
 <script setup>
 import { computed } from 'vue'
-import { Bar } from 'vue-chartjs'
+import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
-  BarElement,
   CategoryScale,
   LinearScale,
+  PointElement,
+  LineElement,
+  Filler,
   Tooltip,
-  Legend,
 } from 'chart.js'
-import ChartDataLabels from 'chartjs-plugin-datalabels'
 
-// Register core Chart.js modules (NOT ChartDataLabels — see note above)
-ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip)
 
 const props = defineProps({
-  // Object with keys a, b, c, d, f — each is a raw student count
   gradeTotals: { type: Object, required: true },
+  // Border color for the curve line and points (default maroon)
+  color: { type: String, default: '#5c0000' },
 })
 
-// Sum of all letter grades (excludes Q, W, I, etc.)
-const total = computed(
-  () => props.gradeTotals.a + props.gradeTotals.b + props.gradeTotals.c + props.gradeTotals.d + props.gradeTotals.f,
+const totalGraded = computed(() =>
+  props.gradeTotals.f + props.gradeTotals.d + props.gradeTotals.c +
+  props.gradeTotals.b + props.gradeTotals.a,
 )
 
-// Convert a raw count to a percentage of total graded students
-const pct = (n) => (total.value ? ((n / total.value) * 100).toFixed(1) : 0)
-
-const rawCounts = computed(() => [
-  props.gradeTotals.a,
-  props.gradeTotals.b,
-  props.gradeTotals.c,
-  props.gradeTotals.d,
+// Raw counts ordered F → A to match the x-axis label order
+const counts = computed(() => [
   props.gradeTotals.f,
+  props.gradeTotals.d,
+  props.gradeTotals.c,
+  props.gradeTotals.b,
+  props.gradeTotals.a,
 ])
 
+// Percentages ordered F → A
+const percents = computed(() => {
+  const t = totalGraded.value
+  return counts.value.map((n) => (t ? parseFloat(((n / t) * 100).toFixed(1)) : 0))
+})
+
 const chartData = computed(() => ({
-  labels: ['A', 'B', 'C', 'D', 'F'],
+  labels: ['F', 'D', 'C', 'B', 'A'],
   datasets: [
     {
-      label: 'Students',
-      data: rawCounts.value.map((n) => parseFloat(pct(n))),
-      backgroundColor: ['#4caf50', '#2196f3', '#ff9800', '#f44336', '#9c27b0'],
-      borderRadius: 4,
+      data: percents.value,
+      borderColor: props.color,
+      backgroundColor: props.color + '30', // ~19% opacity fill under curve
+      fill: true,
+      tension: 0.4,           // smooth bezier curve
+      pointRadius: 6,
+      pointHoverRadius: 8,
+      pointBackgroundColor: props.color,
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
     },
   ],
 }))
 
-const chartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      callbacks: {
-        // Tooltip shows both the percentage and the raw student count
-        label: (ctx) => ` ${ctx.parsed.y}%  (${rawCounts.value[ctx.dataIndex]} students)`,
+const chartOptions = computed(() => {
+  const maxPct = Math.max(...percents.value, 10)
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const labels = ['F', 'D', 'C', 'B', 'A']
+            const countMap = { F: props.gradeTotals.f, D: props.gradeTotals.d, C: props.gradeTotals.c, B: props.gradeTotals.b, A: props.gradeTotals.a }
+            const grade = labels[ctx.dataIndex]
+            return `${grade}: ${ctx.parsed.y}%  (${countMap[grade].toLocaleString()} students)`
+          },
+        },
       },
     },
-    datalabels: {
-      anchor: 'end',
-      align: 'end',
-      formatter: (value) => `${value}%`,
-      font: { weight: 'bold', size: 13 },
-      color: '#333',
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { font: { size: 14, weight: '600' } },
+      },
+      y: {
+        beginAtZero: true,
+        // Auto-scale Y ceiling to 10% above the tallest bar so the curve
+        // doesn't get clipped and small distributions aren't squished
+        max: Math.ceil((maxPct * 1.15) / 10) * 10,
+        ticks: { callback: (v) => `${v}%` },
+        grid: { color: '#f0f0f0' },
+      },
     },
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      max: 100,
-      ticks: { callback: (v) => `${v}%` },
-      title: { display: true, text: '% of graded students' },
-    },
-  },
-}))
+  }
+})
 </script>
 
 <template>
   <div class="chart-container">
-    <!-- Pass ChartDataLabels as a prop so it only applies to this bar chart -->
-    <Bar :data="chartData" :options="chartOptions" :plugins="[ChartDataLabels]" />
+    <Line v-if="totalGraded > 0" :data="chartData" :options="chartOptions" />
   </div>
 </template>
 

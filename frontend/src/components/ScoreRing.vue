@@ -8,6 +8,8 @@ import { computed } from 'vue'
 const props = defineProps({
   score: { type: Number, default: null },
   size: { type: Number, default: 72 },
+  // When true, reverses the color scale so high scores are red (used for difficulty)
+  invert: { type: Boolean, default: false },
 })
 
 const RADIUS = 38
@@ -21,14 +23,15 @@ const fillLength = computed(() =>
 // Gap = the unfilled portion of the ring
 const gapLength = computed(() => CIRCUMFERENCE - fillLength.value)
 
-// Red → yellow → green based on score
+// Red → yellow → green based on score (inverted: green → yellow → red for difficulty)
 const color = computed(() => {
   if (props.score === null) return '#ccc'
-  if (props.score < 50) {
-    const t = props.score / 50
+  const s = props.invert ? 100 - props.score : props.score
+  if (s < 50) {
+    const t = s / 50
     return `rgb(220, ${Math.round(t * 180)}, 0)`
   } else {
-    const t = (props.score - 50) / 50
+    const t = (s - 50) / 50
     return `rgb(${Math.round(220 * (1 - t))}, 180, 0)`
   }
 })

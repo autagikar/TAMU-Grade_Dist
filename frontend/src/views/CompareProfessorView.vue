@@ -4,21 +4,45 @@
      Professor A tags are maroon; Professor B tags are blue. -->
 
 <script setup>
-import { RouterLink } from 'vue-router'
+import { onMounted, watch } from 'vue'
+import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useCompareProfessorStore } from '@/stores/compareProfessor.js'
 import CompareProfessorSearch from '@/components/CompareProfessorSearch.vue'
 import CompareBarChart from '@/components/CompareBarChart.vue'
 import CompareTrendChart from '@/components/CompareTrendChart.vue'
 import ScoreRing from '@/components/ScoreRing.vue'
+import ShareButton from '@/components/ShareButton.vue'
 
-// Both course comparison charts are reused here — they accept generic label/data
-// props so they work for professors just as well as for courses.
 const store = useCompareProfessorStore()
+const router = useRouter()
+const route = useRoute()
+
+// Pre-fill slots from URL query params on load
+onMounted(() => {
+  if (route.query.a) store.a.fetch(route.query.a)
+  if (route.query.b) store.b.fetch(route.query.b)
+})
+
+// Keep URL in sync so the current comparison is always shareable
+watch(
+  () => [store.a.state.instructor, store.b.state.instructor],
+  ([a, b]) => {
+    const query = {}
+    if (a) query.a = a
+    if (b) query.b = b
+    router.replace({ query: Object.keys(query).length ? query : undefined })
+  },
+)
 </script>
 
 <template>
   <div class="compare">
     <main class="content">
+      <!-- Share button for the current comparison -->
+      <div v-if="store.a.state.instructor || store.b.state.instructor" class="share-row">
+        <ShareButton />
+      </div>
+
       <!-- Two professor search bars with a "vs" divider -->
       <div class="search-row">
         <div class="slot">
@@ -147,13 +171,19 @@ const store = useCompareProfessorStore()
 <style scoped>
 .compare {
   min-height: 100vh;
-  background: #f9f9f9;
+  background: var(--bg);
 }
 
 .content {
   max-width: 960px;
   margin: 0 auto;
   padding: 32px 24px;
+}
+
+.share-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 
 .search-row {
@@ -171,7 +201,7 @@ const store = useCompareProfessorStore()
   margin: 0 0 6px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #555;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -179,7 +209,7 @@ const store = useCompareProfessorStore()
 .vs {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #aaa;
+  color: var(--text-muted);
   padding-bottom: 10px;
   flex-shrink: 0;
 }
@@ -188,8 +218,8 @@ const store = useCompareProfessorStore()
   display: flex;
   gap: 0;
   margin-bottom: 28px;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -201,13 +231,13 @@ const store = useCompareProfessorStore()
 
 .divider {
   width: 1px;
-  background: #e0e0e0;
+  background: var(--border);
 }
 
 .prof-title {
   margin: 0 0 12px;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text);
 }
 
 .stats {
@@ -232,12 +262,12 @@ const store = useCompareProfessorStore()
   font-weight: 700;
 }
 
-.stat-value.a { color: #5c0000; }
+.stat-value.a { color: var(--primary-text); }
 .stat-value.b { color: #2196f3; }
 
 .stat-label {
   font-size: 0.75rem;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -248,11 +278,10 @@ const store = useCompareProfessorStore()
   gap: 6px;
 }
 
-/* Professor A course tags — maroon theme */
 .course-tag {
-  background: #f0e8e8;
-  color: #5c0000;
-  border: 1px solid #d9c0c0;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary-text);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
   border-radius: 4px;
   padding: 3px 8px;
   font-size: 0.82rem;
@@ -261,25 +290,22 @@ const store = useCompareProfessorStore()
 }
 
 .course-tag:hover {
-  background: #e0d0d0;
-  border-color: #5c0000;
+  border-color: var(--primary-text);
 }
 
-/* Professor B course tags — blue theme */
 .course-tag.b {
-  background: #e3f2fd;
+  background: color-mix(in srgb, #2196f3 10%, var(--surface));
   color: #1565c0;
-  border-color: #bbdefb;
+  border-color: color-mix(in srgb, #2196f3 30%, var(--border));
 }
 
 .course-tag.b:hover {
-  background: #bbdefb;
   border-color: #2196f3;
 }
 
 .card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
@@ -288,18 +314,18 @@ const store = useCompareProfessorStore()
 .card h2 {
   margin: 0 0 20px;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text);
 }
 
 .status {
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
   margin-top: 48px;
 }
 
 .empty {
   text-align: center;
-  color: #aaa;
+  color: var(--text-muted);
   margin-top: 64px;
   font-size: 1.1rem;
 }

@@ -36,3 +36,17 @@ export const getSections = (course = null, semester = null, instructor = null) =
 // used to populate the "All Semesters" filter dropdown.
 export const getSemesters = () =>
   api.get('/semesters')
+
+// Returns all distinct department names (used to populate the rankings dropdown).
+export const getDepartments = () =>
+  api.get('/departments')
+
+// Returns aggregated professor stats for every instructor in the given department,
+// sorted by professor score descending. Used by the Department Rankings page.
+export const getDepartmentRankings = (department) =>
+  api.get('/rankings', { params: { department } })
+
+// Returns aggregated course stats for every course in the given department,
+// sorted by difficulty descending. Used by the Course Rankings page.
+export const getCourseRankings = (department) =>
+  api.get('/course-rankings', { params: { department } })

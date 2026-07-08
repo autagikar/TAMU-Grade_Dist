@@ -7,17 +7,44 @@
      Slot A is colored maroon, Slot B is colored blue throughout. -->
 
 <script setup>
+import { onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useCompareStore } from '@/stores/compare.js'
 import CompareSearch from '@/components/CompareSearch.vue'
 import CompareBarChart from '@/components/CompareBarChart.vue'
 import CompareTrendChart from '@/components/CompareTrendChart.vue'
+import ShareButton from '@/components/ShareButton.vue'
 
 const store = useCompareStore()
+const router = useRouter()
+const route = useRoute()
+
+// Pre-fill slots from URL query params on load
+onMounted(() => {
+  if (route.query.a) store.a.fetch(route.query.a)
+  if (route.query.b) store.b.fetch(route.query.b)
+})
+
+// Keep URL in sync as selections change so links are shareable
+watch(
+  () => [store.a.state.course, store.b.state.course],
+  ([a, b]) => {
+    const query = {}
+    if (a) query.a = a
+    if (b) query.b = b
+    router.replace({ query: Object.keys(query).length ? query : undefined })
+  },
+)
 </script>
 
 <template>
   <div class="compare">
     <main class="content">
+      <!-- Share button for the current comparison -->
+      <div v-if="store.a.state.course || store.b.state.course" class="share-row">
+        <ShareButton />
+      </div>
+
       <!-- Two search bars with a "vs" divider between them -->
       <div class="search-row">
         <div class="slot">
@@ -113,13 +140,19 @@ const store = useCompareStore()
 <style scoped>
 .compare {
   min-height: 100vh;
-  background: #f9f9f9;
+  background: var(--bg);
 }
 
 .content {
   max-width: 960px;
   margin: 0 auto;
   padding: 32px 24px;
+}
+
+.share-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 
 .search-row {
@@ -137,7 +170,7 @@ const store = useCompareStore()
   margin: 0 0 6px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #555;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -145,7 +178,7 @@ const store = useCompareStore()
 .vs {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #aaa;
+  color: var(--text-muted);
   padding-bottom: 10px;
   flex-shrink: 0;
 }
@@ -154,8 +187,8 @@ const store = useCompareStore()
   display: flex;
   gap: 0;
   margin-bottom: 28px;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -167,13 +200,13 @@ const store = useCompareStore()
 
 .divider {
   width: 1px;
-  background: #e0e0e0;
+  background: var(--border);
 }
 
 .course-title {
   margin: 0 0 12px;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text);
 }
 
 .stats {
@@ -196,19 +229,19 @@ const store = useCompareStore()
   font-weight: 700;
 }
 
-.stat-value.a { color: #5c0000; }
+.stat-value.a { color: var(--primary-text); }
 .stat-value.b { color: #2196f3; }
 
 .stat-label {
   font-size: 0.75rem;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
@@ -217,18 +250,18 @@ const store = useCompareStore()
 .card h2 {
   margin: 0 0 20px;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text);
 }
 
 .status {
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
   margin-top: 48px;
 }
 
 .empty {
   text-align: center;
-  color: #aaa;
+  color: var(--text-muted);
   margin-top: 64px;
   font-size: 1.1rem;
 }

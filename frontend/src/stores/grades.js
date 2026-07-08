@@ -125,6 +125,20 @@ export const useGradesStore = defineStore('grades', () => {
       .sort((a, b) => a.instructor.localeCompare(b.instructor))
   })
 
+  // Course difficulty score 0–100: inverse of the professor score formula.
+  // High difficulty = low GPA + high F%. Uses all sections (not instructor-filtered)
+  // so the score reflects the course as a whole, not one instructor's sections.
+  const courseDifficulty = computed(() => {
+    const valid = sections.value.filter((s) => s.gpa !== null && s.a_to_f > 0)
+    if (!valid.length) return null
+    const totalGraded = valid.reduce((sum, s) => sum + s.a_to_f, 0)
+    const weightedGpa = valid.reduce((sum, s) => sum + s.gpa * s.a_to_f, 0)
+    const totalF = valid.reduce((sum, s) => sum + s.f, 0)
+    const avgGpa = weightedGpa / totalGraded
+    const fPercent = totalF / totalGraded
+    return Math.min(100, Math.round((1 - avgGpa / 4.0) * 70 + fPercent * 30))
+  })
+
   return {
     selectedCourse,
     selectedSemester,
@@ -137,6 +151,7 @@ export const useGradesStore = defineStore('grades', () => {
     gradeTotals,
     averageGpa,
     totalStudents,
+    courseDifficulty,
     gpaPerSemester,
     gpaPerSemesterByInstructor,
     fetchSemesters,

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional
 from app.database import get_db
 from app.models import Section
@@ -97,3 +98,92 @@ def get_sections(
 
     # Order by semester then section so the data arrives in a sensible default order
     return query.order_by(Section.semester, Section.section).all()
+
+
+@router.get("/rankings")
+def get_department_rankings(department: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    # Returns one row per professor in the given department with aggregated stats.
+    # Only includes professors with at least 2 sections to filter out one-off visitors.
+    results = (
+        db.query(
+            Section.instructor,
+            (func.sum(Section.gpa * Section.a_to_f) / func.sum(Section.a_to_f)).label("avg_gpa"),
+            func.sum(Section.total).label("total_students"),
+            func.count(Section.id).label("sections_count"),
+            # Multiply by 1.0 to force float division instead of integer division
+            (func.sum(Section.a * 1.0) / func.sum(Section.a_to_f)).label("a_percent"),
+        )
+        .filter(
+            Section.department == department,
+            Section.instructor != None,
+            Section.a_to_f > 0,
+            Section.gpa != None,
+        )
+        .group_by(Section.instructor)
+        .having(func.count(Section.id) >= 2)
+        .all()
+    )
+
+    rankings = []
+    for r in results:
+        avg_gpa = float(r.avg_gpa) if r.avg_gpa is not None else None
+        a_percent = float(r.a_percent) if r.a_percent is not None else 0.0
+        score = (
+            min(100, round((avg_gpa / 4.0) * 70 + a_percent * 30))
+            if avg_gpa is not None else None
+        )
+        rankings.append({
+            "instructor": r.instructor,
+            "avg_gpa": round(avg_gpa, 3) if avg_gpa is not None else None,
+            "total_students": int(r.total_students),
+            "sections_count": int(r.sections_count),
+            "a_percent": round(a_percent * 100, 1),
+            "score": score,
+        })
+
+    # Default sort: highest score first, nulls last
+    return sorted(rankings, key=lambda x: x["score"] or 0, reverse=True)
+
+
+@router.get("/course-rankings")
+def get_course_rankings(department: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    # Returns one row per course in the given department with aggregated stats.
+    # Difficulty is computed on the frontend from avg_gpa and f_percent.
+    results = (
+        db.query(
+            Section.course,
+            (func.sum(Section.gpa * Section.a_to_f) / func.sum(Section.a_to_f)).label("avg_gpa"),
+            func.sum(Section.total).label("total_students"),
+            func.count(Section.id).label("sections_count"),
+            (func.sum(Section.a * 1.0) / func.sum(Section.a_to_f)).label("a_percent"),
+            (func.sum(Section.f * 1.0) / func.sum(Section.a_to_f)).label("f_percent"),
+            # Q-drop % uses total enrolled as denominator since Q students never received a grade
+            (func.sum(Section.q * 1.0) / func.sum(Section.total)).label("q_percent"),
+        )
+        .filter(
+            Section.department == department,
+            Section.a_to_f > 0,
+            Section.gpa != None,
+        )
+        .group_by(Section.course)
+        .all()
+    )
+
+    courses = []
+    for r in results:
+        avg_gpa = float(r.avg_gpa) if r.avg_gpa is not None else None
+        a_pct = float(r.a_percent) if r.a_percent is not None else 0.0
+        f_pct = float(r.f_percent) if r.f_percent is not None else 0.0
+        q_pct = float(r.q_percent) if r.q_percent is not None else 0.0
+        courses.append({
+            "course": r.course,
+            "avg_gpa": round(avg_gpa, 3) if avg_gpa is not None else None,
+            "total_students": int(r.total_students),
+            "sections_count": int(r.sections_count),
+            "a_percent": round(a_pct * 100, 1),
+            "f_percent": round(f_pct * 100, 1),
+            "q_percent": round(q_pct * 100, 1),
+        })
+
+    # Default sort: lowest avg GPA first (hardest courses at the top)
+    return sorted(courses, key=lambda x: x["avg_gpa"] or 4.0)

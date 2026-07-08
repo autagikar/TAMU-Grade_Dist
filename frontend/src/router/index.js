@@ -9,6 +9,8 @@ import ProfessorView from '@/views/ProfessorView.vue'
 import CompareView from '@/views/CompareView.vue'
 import CompareProfessorView from '@/views/CompareProfessorView.vue'
 import MyCoursesView from '@/views/MyCoursesView.vue'
+import RankingsView from '@/views/RankingsView.vue'
+import CourseRankingsView from '@/views/CourseRankingsView.vue'
 
 const router = createRouter({
   // createWebHistory uses the browser's History API for clean URLs (/professor
@@ -21,6 +23,8 @@ const router = createRouter({
     { path: '/compare',            component: CompareView },         // Compare Courses
     { path: '/compare-professor',  component: CompareProfessorView },// Compare Professors
     { path: '/my-courses',         component: MyCoursesView },       // My Courses
+    { path: '/rankings',           component: RankingsView },         // Department Rankings
+    { path: '/course-rankings',    component: CourseRankingsView },   // Course Rankings
   ],
 })
 
