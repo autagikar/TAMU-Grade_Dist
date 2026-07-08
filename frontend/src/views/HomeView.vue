@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useGradesStore } from '@/stores/grades.js'
 import { useMyCoursesStore } from '@/stores/myCourses.js'
@@ -9,6 +9,8 @@ import GpaTrendChart from '@/components/GpaTrendChart.vue'
 import SectionsTable from '@/components/SectionsTable.vue'
 import ShareButton from '@/components/ShareButton.vue'
 import GradePredictor from '@/components/GradePredictor.vue'
+import CourseInfoCard from '@/components/CourseInfoCard.vue'
+import { getCourseDescription } from '@/api/index.js'
 
 const route = useRoute()
 const store = useGradesStore()
@@ -16,6 +18,22 @@ const myCoursesStore = useMyCoursesStore()
 
 const presetCourse = computed(() => route.query.course || null)
 const isSaved = computed(() => store.selectedCourse && myCoursesStore.isSaved(store.selectedCourse))
+
+const courseInfo = ref(null)
+const courseInfoLoading = ref(false)
+
+watch(() => store.selectedCourse, async (course) => {
+  if (!course) { courseInfo.value = null; return }
+  courseInfoLoading.value = true
+  try {
+    const res = await getCourseDescription(course)
+    courseInfo.value = res.data || null
+  } catch {
+    courseInfo.value = null
+  } finally {
+    courseInfoLoading.value = false
+  }
+})
 
 onMounted(() => {
   store.fetchSemesters()
@@ -89,6 +107,9 @@ onMounted(() => {
             </button>
           </div>
         </div>
+
+        <!-- Course catalog info -->
+        <CourseInfoCard :info="courseInfo" :loading="courseInfoLoading" />
 
         <!-- S/U notice banner -->
         <div v-if="store.isSUCourse" class="su-notice">

@@ -50,3 +50,8 @@ export const getDepartmentRankings = (department) =>
 // sorted by difficulty descending. Used by the Course Rankings page.
 export const getCourseRankings = (department) =>
   api.get('/course-rankings', { params: { department } })
+
+// Returns catalog description data for a single course (title, credits, hours, description, prerequisites).
+// Returns null if the course was not found in the catalog scrape.
+export const getCourseDescription = (course) =>
+  api.get('/courses/description', { params: { course } })

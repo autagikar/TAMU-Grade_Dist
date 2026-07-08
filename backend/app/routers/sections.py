@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
 from app.database import get_db
-from app.models import Section
+from app.models import Section, CourseDescription
 from app.schemas import SectionResponse
 
 # All routes in this file are prefixed with /api
@@ -98,6 +98,23 @@ def get_sections(
 
     # Order by semester then section so the data arrives in a sensible default order
     return query.order_by(Section.semester, Section.section).all()
+
+
+@router.get("/courses/description")
+def get_course_description(course: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    normalized = course.strip().upper().replace(" ", "-")
+    row = db.query(CourseDescription).filter(CourseDescription.course_code == normalized).first()
+    if not row:
+        return None
+    return {
+        "course_code":   row.course_code,
+        "title":         row.title,
+        "credits":       row.credits,
+        "lecture_hours": row.lecture_hours,
+        "lab_hours":     row.lab_hours,
+        "description":   row.description,
+        "prerequisites": row.prerequisites,
+    }
 
 
 @router.get("/rankings")

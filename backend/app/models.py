@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric
+from sqlalchemy import Column, Integer, String, Numeric, Text
 from app.database import Base
 
 
@@ -27,3 +27,15 @@ class Section(Base):
     q          = Column(Integer)  # dropped
     x          = Column(Integer)  # absent from final
     total      = Column(Integer)
+
+
+class CourseDescription(Base):
+    __tablename__ = "course_descriptions"
+
+    course_code   = Column(String, primary_key=True)
+    title         = Column(Text)
+    credits       = Column(String)
+    lecture_hours = Column(String)
+    lab_hours     = Column(String)
+    description   = Column(Text)
+    prerequisites = Column(Text)
