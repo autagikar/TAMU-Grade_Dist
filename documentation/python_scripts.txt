@@ -5,7 +5,7 @@ This document explains every Python file in the project in detail: what it does,
 how it works, and why it was written the way it was.
 
 The Python code covers two concerns:
-  1. The SCRAPER — fetches, parses, and loads PDF data into the database
+  1. The SCRAPER — fetches, parses, and loads data into the database
   2. The BACKEND API — serves data from the database to the Vue frontend
 
 ================================================================================
@@ -13,8 +13,9 @@ SCRAPER
 ================================================================================
 
 The TAMU grade distribution website publishes PDF reports for each combination
-of year, academic term, and college. The scraper downloads those PDFs and
-extracts the structured data from them.
+of year, academic term, and college. The scraper downloads those PDFs, extracts
+structured grade data from them, and separately scrapes the TAMU course catalog
+for course descriptions.
 
 --------------------------------------------------------------------------------
 scraper/get_college_codes.py
@@ -91,10 +92,6 @@ NOT EVERY COMBINATION EXISTS:
   don't offer summer courses, or data doesn't go back as far as 2021 for all
   colleges. The validation step handles this gracefully by recording "no data"
   instead of crashing.
-
-OUTPUT:
-  Prints a summary of how many files were downloaded, already existed, or had
-  no data available.
 
 --------------------------------------------------------------------------------
 scraper/extract.py
@@ -188,31 +185,84 @@ HOW IT WORKS:
   2. Iterates over all PDFs in the directory in sorted order.
   3. For each PDF, calls extract() to get a list of section dicts.
   4. Uses psycopg2's executemany() to insert the entire batch in one call.
-     This is faster than calling execute() in a loop because psycopg2 can
-     optimize the round trips to the database.
   5. Calls conn.commit() after each PDF so that progress is saved even if the
-     script crashes partway through. (Without commit(), all changes would be
-     rolled back if the script fails.)
+     script crashes partway through.
   6. Prints progress as each file is processed.
-  7. Closes the cursor and connection when done.
-
-THE INSERT SQL:
-  Uses named placeholders %(key)s which psycopg2 fills from the dictionary
-  returned by extract(). This prevents SQL injection (the values are always
-  treated as data, never as SQL code) and handles Python-to-SQL type conversion
-  automatically (e.g. None becomes NULL).
 
 DATABASE CONNECTION:
-  The connection parameters are hardcoded to match the docker-compose.yml
-  configuration. The backend container uses the DATABASE_URL environment variable
-  instead, but this script runs locally and connects to Docker's exposed port.
+  If the DATABASE_URL environment variable is set (e.g. pointing to Supabase),
+  it connects using that URL directly. Otherwise falls back to the local Docker
+  config (localhost:5432, user "tamu", password "devpassword", db "grades").
+
+NOTE ON S/U GRADED COURSES:
+  Some TAMU courses use Satisfactory/Unsatisfactory grading instead of letter
+  grades. For these sections, the PDF records gpa=0 since no numeric GPA is
+  assigned. The application detects gpa=0 as S/U and excludes these sections
+  from all GPA calculations and rankings to prevent them from artificially
+  dragging down averages.
+
+--------------------------------------------------------------------------------
+scraper/fetch_descriptions.py
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Scrapes course title, credits, lecture hours, lab hours, description, and
+  prerequisites from the TAMU undergraduate and graduate course catalogs and
+  loads them into the course_descriptions lookup table. This script is separate
+  from the PDF scraper because it targets a different data source (the web
+  catalog rather than PDF reports).
+
+WHY A SEPARATE LOOKUP TABLE:
+  The sections table has ~99,000 rows, each representing one section of one
+  course in one semester. Storing description data in sections would mean
+  duplicating it thousands of times. A separate course_descriptions table with
+  one row per course code is cleaner and more efficient. The two tables are
+  linked logically at query time using the course code string — no foreign key
+  constraint is needed.
+
+HOW IT WORKS:
+  1. Queries the sections table to find all distinct course prefixes
+     (e.g. "BMEN", "CSCE") using SPLIT_PART on the course code.
+  2. For each prefix, hits both the undergraduate and graduate catalog URLs:
+       https://catalog.tamu.edu/undergraduate/course-descriptions/{prefix}/
+       https://catalog.tamu.edu/graduate/course-descriptions/{prefix}/
+  3. Parses each page with BeautifulSoup, finding all div.courseblock elements.
+  4. For each course block, extracts:
+       - Course code: from the title text ("BMEN 291" → stored as "BMEN-291")
+       - Title: the course name portion of the title line
+       - Credits: parsed from "Credits 3" or "3 Credits" patterns in the description
+       - Lecture hours: parsed from "N Lecture Hours" pattern
+       - Lab hours: parsed from "N Lab Hours" pattern
+       - Description: the body text after stripping the credits/hours header
+       - Prerequisites: extracted from the "Prerequisite: ..." sentence at the end
+  5. Upserts each row using ON CONFLICT (course_code) DO UPDATE so the script is
+     safe to re-run — existing rows are updated, not duplicated.
+  6. Waits 0.3 seconds between page requests to be polite to the TAMU server.
+
+KEY PARSING DETAIL:
+  The TAMU catalog places credits, hours, description, and prerequisites all in
+  a single .courseblockdesc paragraph rather than in separate HTML elements.
+  The parsing extracts each field using regex, strips the credits/hours header
+  from the start of the text, and strips the prerequisite sentence from the end
+  to isolate the clean description body.
+
+UPSERT SQL:
+  Uses INSERT ... ON CONFLICT (course_code) DO UPDATE SET ... so that re-running
+  the script refreshes data without creating duplicates. This is important because
+  the catalog updates each semester.
+
+DATABASE CONNECTION:
+  Uses the same DATABASE_URL environment variable pattern as load_to_db.py.
+  Run with DATABASE_URL set to target Supabase, or without it to target the
+  local Docker database.
 
 ================================================================================
 BACKEND API
 ================================================================================
 
-The backend is a FastAPI application running inside Docker. It connects to the
-PostgreSQL database and exposes a REST API that the Vue frontend consumes.
+The backend is a FastAPI application running inside Docker locally and on
+Railway in production. It connects to PostgreSQL (local Docker or Supabase)
+and exposes a REST API that the Vue frontend consumes.
 
 --------------------------------------------------------------------------------
 backend/app/database.py
@@ -227,42 +277,48 @@ KEY CONCEPTS:
     The URL is read from the environment, not hard-coded. In docker-compose.yml,
     it's set to "postgresql://tamu:devpassword@db:5432/grades". The hostname "db"
     works because Docker's internal network resolves container names to their
-    IP addresses automatically.
+    IP addresses automatically. In production, Railway injects the Supabase URL.
 
   engine:
-    SQLAlchemy's engine manages the actual database connection pool. All queries
-    go through this engine.
+    SQLAlchemy's engine manages the actual database connection pool.
 
   SessionLocal:
     A factory that creates new database sessions. Each HTTP request gets its
     own session via the get_db() dependency.
 
   get_db():
-    A FastAPI dependency function. FastAPI injects it into route handlers via
-    Depends(get_db). The try/finally pattern guarantees the session is always
-    closed after the request, even if the handler raises an exception.
-    This prevents connection leaks.
+    A FastAPI dependency function injected into route handlers via Depends(get_db).
+    The try/finally pattern guarantees the session is always closed after the
+    request, even if the handler raises an exception. This prevents connection leaks.
 
 --------------------------------------------------------------------------------
 backend/app/models.py
 --------------------------------------------------------------------------------
 
 PURPOSE:
-  Defines the Section SQLAlchemy model — the Python class that maps to the
-  "sections" table in PostgreSQL.
+  Defines the SQLAlchemy ORM models that map to the PostgreSQL tables.
 
-HOW IT WORKS:
-  SQLAlchemy's ORM (Object-Relational Mapper) lets us write Python instead of
-  raw SQL for most queries. Each attribute on the Section class corresponds to
-  a column in the table. The __tablename__ attribute tells SQLAlchemy which
-  table to use.
+SECTION MODEL:
+  Maps to the "sections" table. Each attribute corresponds to a column.
 
-COLUMN NOTES:
-  - gpa is Numeric (not Float) to avoid floating-point precision issues in storage.
-  - a_to_f is the sum of A+B+C+D+F grades — it's stored separately because TAMU
-    publishes it directly and it's used as the weight for GPA calculations.
-  - q (dropped with Q-drop), i (incomplete), s/u (satisfactory/unsatisfactory),
-    and x (absent from final) are non-letter-grade outcomes tracked separately.
+  Column notes:
+    - gpa is Numeric (not Float) to avoid floating-point precision issues.
+    - a_to_f is the sum of A+B+C+D+F grades stored separately because TAMU
+      publishes it directly and it's used as the weight in GPA calculations.
+    - s/u columns track Satisfactory/Unsatisfactory outcomes. When a section is
+      S/U graded, gpa=0 and a_to_f=0, while s and u hold the student counts.
+
+COURSEDESCRIPTION MODEL:
+  Maps to the "course_descriptions" lookup table populated by fetch_descriptions.py.
+
+  Columns:
+    course_code   TEXT PRIMARY KEY  — e.g. "BMEN-291"
+    title         TEXT              — e.g. "Biomedical Engineering Laboratory I"
+    credits       NUMERIC(4,1)      — e.g. 3.0 (NUMERIC not INTEGER to handle 1.5-credit courses)
+    lecture_hours SMALLINT          — e.g. 3
+    lab_hours     SMALLINT          — e.g. 1
+    description   TEXT              — catalog course description body
+    prerequisites TEXT              — prerequisite text, parsed from catalog
 
 --------------------------------------------------------------------------------
 backend/app/schemas.py
@@ -270,21 +326,18 @@ backend/app/schemas.py
 
 PURPOSE:
   Defines the SectionResponse Pydantic model which controls what data the API
-  returns in JSON responses.
+  returns for section rows.
 
 HOW IT WORKS:
-  FastAPI uses Pydantic models for both input validation and output serialization.
-  When a route returns a list[SectionResponse], FastAPI automatically:
-  1. Reads data from the SQLAlchemy model attributes.
-  2. Validates and coerces types.
-  3. Serializes to JSON.
+  FastAPI uses Pydantic for output serialization. When a route returns
+  list[SectionResponse], FastAPI reads SQLAlchemy model attributes, validates
+  types, and serializes to JSON automatically.
 
-  The from_attributes = True config (formerly orm_mode = True in Pydantic v1)
-  tells Pydantic to read values from SQLAlchemy model attributes rather than
-  expecting a plain dictionary.
+  from_attributes = True (formerly orm_mode) tells Pydantic to read from
+  SQLAlchemy model attributes rather than expecting plain dictionaries.
 
-  Optional fields (gpa, instructor) handle NULL database values gracefully by
-  allowing them to become null in the JSON response.
+  Optional fields (gpa, instructor) handle NULL database values by allowing
+  them to become null in the JSON response.
 
 --------------------------------------------------------------------------------
 backend/app/main.py
@@ -295,14 +348,10 @@ PURPOSE:
   the API router.
 
 CORS MIDDLEWARE:
-  CORS (Cross-Origin Resource Sharing) is a browser security feature that blocks
-  JavaScript from making requests to a different origin (domain + port) than the
-  page it's running on. Our Vue frontend runs on localhost:5173 and the API runs
-  on localhost:8000 — these are different origins, so without CORS middleware,
-  every API call from the browser would be blocked.
-
-  The middleware is configured to only allow requests from localhost:5173 using
-  GET methods, which is the minimum permission needed.
+  The Vue frontend and API run on different origins (different ports in dev,
+  different domains in production). Without CORS middleware, browsers block
+  all cross-origin requests. The middleware is configured to allow requests
+  from both localhost:5173 (local dev) and the deployed Vercel frontend URL.
 
 --------------------------------------------------------------------------------
 backend/app/routers/sections.py
@@ -319,26 +368,48 @@ ENDPOINTS:
 
   GET /api/departments?college=ENGINEERING
     Returns distinct department names, optionally filtered by college.
-    Not currently consumed by the frontend.
 
   GET /api/semesters
-    Returns all distinct semester strings in the database (e.g. "Spring 2026").
+    Returns all distinct semester strings (e.g. "Spring 2026").
     The frontend sorts these by a custom chronological key after receiving them.
 
   GET /api/courses/search?q=csce
     Autocomplete for course codes. Normalizes the query (uppercase, spaces→dashes)
-    before searching so "csce 121" and "CSCE-121" both match.
-    Requires q to be at least 2 characters (enforced by FastAPI's Query validator).
+    so "csce 121" and "CSCE-121" both match. Requires q ≥ 2 characters.
+
+  GET /api/courses/description?course=CSCE-120
+    Looks up catalog description data for a single course from the
+    course_descriptions table. Returns null if the course has no catalog entry.
+    Normalizes the course code the same way as the search endpoint.
 
   GET /api/instructors/search?q=smith
-    Autocomplete for instructor names. Does a case-insensitive substring search
-    against the formatted name (e.g. "J. Smith"). Returns only non-empty values.
+    Autocomplete for instructor names. Case-insensitive substring search.
+    Returns only non-empty values.
 
   GET /api/sections?course=CSCE-121&semester=Spring+2026&instructor=J.+Smith
-    The main data endpoint. Returns all section rows matching the provided filters.
-    At least one of course or instructor is required to prevent returning the
-    full 99k-row table. All three filters are optional independently, but at
-    least one must be present.
+    The main data endpoint. Returns all matching section rows.
+    At least one of course or instructor is required to prevent returning all
+    99k rows. Course codes are normalized on input.
 
-    Course codes are normalized on input (same as the search endpoint) so that
-    the frontend can pass "CSCE-121" or "CSCE 121" interchangeably.
+  GET /api/rankings?department=COMPUTER+SCIENCE+%26+ENGINEERING
+    Returns one row per professor in the department with aggregated stats:
+    avg_gpa, total_students, sections_count, a_percent, and a computed score.
+
+    PROFESSOR SCORE FORMULA:
+      score = round((avg_gpa / 4.0) * 70 + a_percent * 30)
+      - 70% weight on average GPA (scaled to 0–100)
+      - 30% weight on percentage of students who received A grades
+      - Capped at 100
+      - S/U sections (gpa=0) are excluded from the calculation via
+        Section.gpa > 0 filter so they don't drag down professor scores.
+
+    Only professors with ≥ 2 sections are included (filters out one-off visitors).
+    Default sort: highest score first.
+
+  GET /api/course-rankings?department=COMPUTER+SCIENCE+%26+ENGINEERING
+    Returns one row per course in the department with aggregated stats:
+    avg_gpa, total_students, sections_count, a_percent, f_percent, q_percent.
+
+    S/U sections (gpa=0) are excluded via Section.gpa > 0 filter so S/U-only
+    courses don't appear as the "hardest" courses in the rankings.
+    Default sort: lowest avg_gpa first (hardest courses at the top).
