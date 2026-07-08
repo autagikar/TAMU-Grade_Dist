@@ -60,7 +60,10 @@ function nextPage() { if (currentPage.value < totalPages.value) currentPage.valu
               <RouterLink :to="`/?course=${s.course}`" class="course-link">{{ s.course }}</RouterLink>
             </td>
             <td>{{ s.section }}</td>
-            <td>{{ s.gpa ?? '—' }}</td>
+            <td>
+              <span v-if="s.gpa === 0" class="su-badge">S/U</span>
+              <span v-else>{{ s.gpa ?? '—' }}</span>
+            </td>
             <td>{{ s.a }}</td>
             <td>{{ s.b }}</td>
             <td>{{ s.c }}</td>
@@ -156,5 +159,16 @@ tbody tr:hover {
   color: var(--text-muted);
   min-width: 120px;
   text-align: center;
+}
+
+.su-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--text-muted) 18%, var(--surface));
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
 }
 </style>

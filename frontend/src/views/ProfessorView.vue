@@ -69,7 +69,10 @@ onMounted(() => {
           </div>
           <div class="stat">
             <div class="gpa-with-trend">
-              <span class="stat-value">{{ store.averageGpa }}</span>
+              <span class="stat-value">
+                <span v-if="store.isSUOnly" class="su-label">S/U</span>
+                <template v-else>{{ store.averageGpa ?? '—' }}</template>
+              </span>
               <span
                 v-if="store.gpaTrend"
                 class="trend-arrow"
@@ -111,8 +114,13 @@ onMounted(() => {
           >{{ course }}</RouterLink>
         </div>
 
+        <!-- S/U notice banner -->
+        <div v-if="store.isSUOnly" class="su-notice">
+          All sections taught by this professor use <strong>Satisfactory / Unsatisfactory</strong> grading — no letter grades or GPA are recorded.
+        </div>
+
         <!-- Grade Distribution bar chart -->
-        <section class="card">
+        <section v-if="!store.isSUOnly" class="card">
           <h2>Grade Distribution</h2>
           <GradeChart :grade-totals="store.gradeTotals" />
         </section>
@@ -358,5 +366,22 @@ select {
   color: var(--text-muted);
   margin-top: 64px;
   font-size: 1.1rem;
+}
+
+.su-label {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.su-notice {
+  background: color-mix(in srgb, var(--text-muted) 10%, var(--surface));
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-muted);
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  font-size: 0.92rem;
+  color: var(--text-muted);
 }
 </style>

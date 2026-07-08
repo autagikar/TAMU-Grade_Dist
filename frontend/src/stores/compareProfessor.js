@@ -29,7 +29,7 @@ function makeSlot() {
 
   // Weighted average GPA across all sections for this professor
   const averageGpa = computed(() => {
-    const valid = state.sections.filter((s) => s.gpa !== null && s.a_to_f > 0)
+    const valid = state.sections.filter((s) => s.gpa !== null && s.gpa > 0 && s.a_to_f > 0)
     if (!valid.length) return null
     const weighted = valid.reduce((sum, s) => sum + s.gpa * s.a_to_f, 0)
     const total = valid.reduce((sum, s) => sum + s.a_to_f, 0)
@@ -62,7 +62,7 @@ function makeSlot() {
   const gpaPerSemester = computed(() => {
     const map = {}
     for (const s of state.sections) {
-      if (s.gpa === null || s.a_to_f === 0) continue
+      if (s.gpa === null || s.gpa === 0 || s.a_to_f === 0) continue
       if (!map[s.semester]) map[s.semester] = { weightedSum: 0, total: 0 }
       map[s.semester].weightedSum += s.gpa * s.a_to_f
       map[s.semester].total += s.a_to_f

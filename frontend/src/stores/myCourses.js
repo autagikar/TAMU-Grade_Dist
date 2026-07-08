@@ -60,7 +60,7 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
         const sections = courseData.value[course].sections
         const map = {}
         for (const s of sections) {
-          if (s.gpa === null || s.a_to_f === 0) continue
+          if (s.gpa === null || s.gpa === 0 || s.a_to_f === 0) continue
           if (!map[s.semester]) map[s.semester] = { weightedSum: 0, total: 0 }
           map[s.semester].weightedSum += s.gpa * s.a_to_f
           map[s.semester].total += s.a_to_f
@@ -82,7 +82,7 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
       .filter((c) => courseData.value[c] && !courseData.value[c].loading)
       .map((course) => {
         const sections = courseData.value[course].sections
-        const valid = sections.filter((s) => s.gpa !== null && s.a_to_f > 0)
+        const valid = sections.filter((s) => s.gpa !== null && s.gpa > 0 && s.a_to_f > 0)
         const weightedGpa = valid.length
           ? valid.reduce((sum, s) => sum + s.gpa * s.a_to_f, 0) / valid.reduce((sum, s) => sum + s.a_to_f, 0)
           : null
@@ -116,7 +116,7 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
       const data = courseData.value[c]
       if (!data || data.loading) continue
       for (const s of data.sections) {
-        if (s.gpa === null || s.a_to_f === 0) continue
+        if (s.gpa === null || s.gpa === 0 || s.a_to_f === 0) continue
         weightedSum += s.gpa * s.a_to_f
         totalStudents += s.a_to_f
       }

@@ -87,7 +87,7 @@ export const useProfessorStore = defineStore('professor', () => {
   // Weighted average GPA: each section's GPA is weighted by the number of graded
   // students (a_to_f) so larger sections have more influence on the average.
   const averageGpa = computed(() => {
-    const valid = sections.value.filter((s) => s.gpa !== null && s.a_to_f > 0)
+    const valid = sections.value.filter((s) => s.gpa !== null && s.gpa > 0 && s.a_to_f > 0)
     if (!valid.length) return null
     const weighted = valid.reduce((sum, s) => sum + s.gpa * s.a_to_f, 0)
     const total = valid.reduce((sum, s) => sum + s.a_to_f, 0)
@@ -134,12 +134,17 @@ export const useProfessorStore = defineStore('professor', () => {
     }
   })
 
+  // True when every section this professor has taught is S/U graded (gpa=0)
+  const isSUOnly = computed(() =>
+    sections.value.length > 0 && sections.value.every((s) => s.gpa === 0),
+  )
+
   // Average GPA per semester — used for the single-line GPA trend chart on the
   // professor page. Semesters are sorted oldest → newest so the line reads left to right.
   const gpaPerSemester = computed(() => {
     const map = {}
     for (const s of sections.value) {
-      if (s.gpa === null || s.a_to_f === 0) continue
+      if (s.gpa === null || s.gpa === 0 || s.a_to_f === 0) continue
       if (!map[s.semester]) map[s.semester] = { weightedSum: 0, total: 0 }
       map[s.semester].weightedSum += s.gpa * s.a_to_f
       map[s.semester].total += s.a_to_f
@@ -162,6 +167,7 @@ export const useProfessorStore = defineStore('professor', () => {
     averageGpa,
     totalStudents,
     professorScore,
+    isSUOnly,
     gpaTrend,
     uniqueCourses,
     gpaPerSemester,

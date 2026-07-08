@@ -118,6 +118,7 @@ def get_department_rankings(department: str = Query(..., min_length=1), db: Sess
             Section.instructor != None,
             Section.a_to_f > 0,
             Section.gpa != None,
+            Section.gpa > 0,
         )
         .group_by(Section.instructor)
         .having(func.count(Section.id) >= 2)
@@ -164,6 +165,7 @@ def get_course_rankings(department: str = Query(..., min_length=1), db: Session 
             Section.department == department,
             Section.a_to_f > 0,
             Section.gpa != None,
+            Section.gpa > 0,
         )
         .group_by(Section.course)
         .all()

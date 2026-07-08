@@ -70,7 +70,7 @@ export const useGradesStore = defineStore('grades', () => {
 
   // Weighted average GPA from filtered sections
   const averageGpa = computed(() => {
-    const valid = filteredSections.value.filter((s) => s.gpa !== null && s.a_to_f > 0)
+    const valid = filteredSections.value.filter((s) => s.gpa !== null && s.gpa > 0 && s.a_to_f > 0)
     if (!valid.length) return null
     const weighted = valid.reduce((sum, s) => sum + s.gpa * s.a_to_f, 0)
     const total = valid.reduce((sum, s) => sum + s.a_to_f, 0)
@@ -87,7 +87,7 @@ export const useGradesStore = defineStore('grades', () => {
   const gpaPerSemester = computed(() => {
     const map = {}
     for (const s of sections.value) {
-      if (s.gpa === null || s.a_to_f === 0) continue
+      if (s.gpa === null || s.gpa === 0 || s.a_to_f === 0) continue
       if (!map[s.semester]) map[s.semester] = { weightedSum: 0, total: 0 }
       map[s.semester].weightedSum += s.gpa * s.a_to_f
       map[s.semester].total += s.a_to_f
@@ -105,7 +105,7 @@ export const useGradesStore = defineStore('grades', () => {
   const gpaPerSemesterByInstructor = computed(() => {
     const instructorMap = {}
     for (const s of sections.value) {
-      if (s.gpa === null || s.a_to_f === 0 || !s.instructor) continue
+      if (s.gpa === null || s.gpa === 0 || s.a_to_f === 0 || !s.instructor) continue
       if (!instructorMap[s.instructor]) instructorMap[s.instructor] = {}
       if (!instructorMap[s.instructor][s.semester])
         instructorMap[s.instructor][s.semester] = { weightedSum: 0, total: 0 }
@@ -125,11 +125,16 @@ export const useGradesStore = defineStore('grades', () => {
       .sort((a, b) => a.instructor.localeCompare(b.instructor))
   })
 
+  // True when every section for this course has gpa=0 (S/U grading — no letter grades recorded)
+  const isSUCourse = computed(() =>
+    sections.value.length > 0 && sections.value.every((s) => s.gpa === 0),
+  )
+
   // Course difficulty score 0–100: inverse of the professor score formula.
   // High difficulty = low GPA + high F%. Uses all sections (not instructor-filtered)
   // so the score reflects the course as a whole, not one instructor's sections.
   const courseDifficulty = computed(() => {
-    const valid = sections.value.filter((s) => s.gpa !== null && s.a_to_f > 0)
+    const valid = sections.value.filter((s) => s.gpa !== null && s.gpa > 0 && s.a_to_f > 0)
     if (!valid.length) return null
     const totalGraded = valid.reduce((sum, s) => sum + s.a_to_f, 0)
     const weightedGpa = valid.reduce((sum, s) => sum + s.gpa * s.a_to_f, 0)
@@ -151,6 +156,7 @@ export const useGradesStore = defineStore('grades', () => {
     gradeTotals,
     averageGpa,
     totalStudents,
+    isSUCourse,
     courseDifficulty,
     gpaPerSemester,
     gpaPerSemesterByInstructor,
