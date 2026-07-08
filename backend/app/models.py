@@ -34,8 +34,8 @@ class CourseDescription(Base):
 
     course_code   = Column(String, primary_key=True)
     title         = Column(Text)
-    credits       = Column(String)
-    lecture_hours = Column(String)
-    lab_hours     = Column(String)
+    credits       = Column(Numeric(4, 1))
+    lecture_hours = Column(Integer)
+    lab_hours     = Column(Integer)
     description   = Column(Text)
     prerequisites = Column(Text)

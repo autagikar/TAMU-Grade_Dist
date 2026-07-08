@@ -1,8 +1,33 @@
 <script setup>
+import { RouterLink } from 'vue-router'
+
 defineProps({
   info: { type: Object, default: null },
   loading: { type: Boolean, default: false },
 })
+
+// Splits prerequisite text into plain-text and course-link segments.
+// e.g. "Grade of C in CSCE 315 or CSCE 331" →
+//   [{ type:'text', value:'Grade of C in ' },
+//    { type:'course', display:'CSCE 315', code:'CSCE-315' }, ...]
+function splitPrereqs(text) {
+  if (!text) return []
+  const parts = []
+  const pattern = /\b([A-Z]{3,5})\s+(\d{3}[A-Z]?\w*)\b/g
+  let lastIndex = 0
+  let match
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', value: text.slice(lastIndex, match.index) })
+    }
+    parts.push({ type: 'course', display: match[0], code: `${match[1]}-${match[2]}` })
+    lastIndex = pattern.lastIndex
+  }
+  if (lastIndex < text.length) {
+    parts.push({ type: 'text', value: text.slice(lastIndex) })
+  }
+  return parts
+}
 </script>
 
 <template>
@@ -14,17 +39,17 @@ defineProps({
     <h2 class="course-title">{{ info.title }}</h2>
 
     <div class="chips">
-      <span v-if="info.credits" class="chip">
+      <span v-if="info.credits != null" class="chip">
         <span class="chip-label">Credits</span>
         <span class="chip-value">{{ info.credits }}</span>
       </span>
-      <span v-if="info.lecture_hours" class="chip">
+      <span v-if="info.lecture_hours != null" class="chip">
         <span class="chip-label">Lecture Hours</span>
         <span class="chip-value">{{ info.lecture_hours }}</span>
       </span>
-      <span v-if="info.lab_hours" class="chip">
+      <span v-if="info.lecture_hours != null || info.lab_hours != null" class="chip">
         <span class="chip-label">Lab Hours</span>
-        <span class="chip-value">{{ info.lab_hours }}</span>
+        <span class="chip-value">{{ info.lab_hours ?? 0 }}</span>
       </span>
     </div>
 
@@ -32,7 +57,16 @@ defineProps({
 
     <div v-if="info.prerequisites" class="prereqs">
       <span class="prereqs-label">Prerequisites:</span>
-      <span class="prereqs-text">{{ info.prerequisites }}</span>
+      <span class="prereqs-text">
+        <template v-for="(part, i) in splitPrereqs(info.prerequisites)" :key="i">
+          <RouterLink
+            v-if="part.type === 'course'"
+            :to="`/?course=${part.code}`"
+            class="prereq-link"
+          >{{ part.display }}</RouterLink>
+          <template v-else>{{ part.value }}</template>
+        </template>
+      </span>
     </div>
   </div>
 </template>
@@ -105,7 +139,7 @@ defineProps({
 .prereqs {
   font-size: 0.88rem;
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1.6;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
@@ -118,5 +152,16 @@ defineProps({
 
 .prereqs-text {
   color: var(--text-muted);
+}
+
+.prereq-link {
+  color: var(--primary-text);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--primary-text);
+}
+
+.prereq-link:hover {
+  border-bottom-style: solid;
 }
 </style>

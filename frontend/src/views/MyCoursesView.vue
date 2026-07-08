@@ -50,6 +50,9 @@ onMounted(() => store.hydrate())
                 <thead>
                   <tr>
                     <th>Course</th>
+                    <th>Credits</th>
+                    <th>Lecture Hrs</th>
+                    <th>Lab Hrs</th>
                     <th>Avg GPA</th>
                     <th>Students</th>
                     <th>Sections</th>
@@ -68,6 +71,9 @@ onMounted(() => store.hydrate())
                         {{ row.course }}
                       </RouterLink>
                     </td>
+                    <td>{{ row.credits ?? '—' }}</td>
+                    <td>{{ row.lectureHours ?? '—' }}</td>
+                    <td>{{ row.labHours ?? 0 }}</td>
                     <td class="gpa-cell">{{ row.avgGpa ?? '—' }}</td>
                     <td>{{ row.totalStudents.toLocaleString() }}</td>
                     <td>{{ row.sections }}</td>
@@ -81,7 +87,10 @@ onMounted(() => store.hydrate())
                 </tbody>
                 <tfoot>
                   <tr class="total-row">
-                    <td>Overall Average</td>
+                    <td>Totals / Average</td>
+                    <td class="credit-total">{{ store.totalCredits ?? '—' }}</td>
+                    <td>{{ store.totalLectureHours ?? '—' }}</td>
+                    <td>{{ store.totalLabHours ?? 0 }}</td>
                     <td class="gpa-cell">{{ store.overallAvgGpa ?? '—' }}</td>
                     <td colspan="8"></td>
                   </tr>
@@ -233,6 +242,11 @@ tfoot .total-row {
 .gpa-cell {
   color: var(--primary-text);
   font-weight: 600;
+}
+
+.credit-total {
+  color: var(--primary-text);
+  font-weight: 700;
 }
 
 .course-link {

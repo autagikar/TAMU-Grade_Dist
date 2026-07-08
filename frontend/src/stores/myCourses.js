@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getSections } from '@/api/index.js'
+import { getSections, getCourseDescription } from '@/api/index.js'
 
 const STORAGE_KEY = 'tamu_my_courses'
 
@@ -17,6 +17,9 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
   // Map of course name → { sections, loading }
   const courseData = ref({})
 
+  // Map of course name → description object (from catalog lookup table)
+  const descriptionData = ref({})
+
   function persist() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(courses.value))
   }
@@ -29,12 +32,13 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
     if (isSaved(course)) return
     courses.value.push(course)
     persist()
-    await loadCourse(course)
+    await Promise.all([loadCourse(course), loadDescription(course)])
   }
 
   function removeCourse(course) {
     courses.value = courses.value.filter((c) => c !== course)
     delete courseData.value[course]
+    delete descriptionData.value[course]
     persist()
   }
 
@@ -45,10 +49,20 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
     courseData.value[course] = { sections: res.data, loading: false }
   }
 
+  async function loadDescription(course) {
+    if (descriptionData.value[course] !== undefined) return
+    try {
+      const res = await getCourseDescription(course)
+      descriptionData.value[course] = res.data || null
+    } catch {
+      descriptionData.value[course] = null
+    }
+  }
+
   // On store init, hydrate data for any courses already in localStorage
   async function hydrate() {
     for (const course of courses.value) {
-      await loadCourse(course)
+      await Promise.all([loadCourse(course), loadDescription(course)])
     }
   }
 
@@ -92,20 +106,38 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
           { a: 0, b: 0, c: 0, d: 0, f: 0, q: 0 },
         )
         const gradedTotal = grades.a + grades.b + grades.c + grades.d + grades.f
+        const desc = descriptionData.value[course]
         return {
           course,
           avgGpa: weightedGpa !== null ? +weightedGpa.toFixed(3) : null,
           totalStudents,
           sections: sections.length,
+          credits:      desc?.credits       != null ? Number(desc.credits)       : null,
+          lectureHours: desc?.lecture_hours != null ? Number(desc.lecture_hours) : null,
+          labHours:     desc?.lab_hours     != null ? Number(desc.lab_hours)     : null,
           aPercent: gradedTotal ? +((grades.a / gradedTotal) * 100).toFixed(1) : null,
           bPercent: gradedTotal ? +((grades.b / gradedTotal) * 100).toFixed(1) : null,
           cPercent: gradedTotal ? +((grades.c / gradedTotal) * 100).toFixed(1) : null,
           dPercent: gradedTotal ? +((grades.d / gradedTotal) * 100).toFixed(1) : null,
           fPercent: gradedTotal ? +((grades.f / gradedTotal) * 100).toFixed(1) : null,
-          // Q-drop uses total enrolled as denominator since Q students never received a grade
           qPercent: totalStudents ? +((grades.q / totalStudents) * 100).toFixed(1) : null,
         }
       })
+  })
+
+  const totalCredits = computed(() => {
+    const vals = courseStats.value.map(c => c.credits).filter(v => v != null)
+    return vals.length ? +vals.reduce((s, v) => s + v, 0).toFixed(1) : null
+  })
+
+  const totalLectureHours = computed(() => {
+    const vals = courseStats.value.map(c => c.lectureHours).filter(v => v != null)
+    return vals.length ? vals.reduce((s, v) => s + v, 0) : null
+  })
+
+  const totalLabHours = computed(() => {
+    const vals = courseStats.value.map(c => c.labHours).filter(v => v != null)
+    return vals.length ? vals.reduce((s, v) => s + v, 0) : null
   })
 
   // Overall average GPA across all saved courses (weighted by students)
@@ -124,5 +156,5 @@ export const useMyCoursesStore = defineStore('myCourses', () => {
     return totalStudents ? +(weightedSum / totalStudents).toFixed(3) : null
   })
 
-  return { courses, courseData, isSaved, addCourse, removeCourse, hydrate, gpaSeriesByCourse, courseStats, overallAvgGpa, isLoading }
+  return { courses, courseData, isSaved, addCourse, removeCourse, hydrate, gpaSeriesByCourse, courseStats, overallAvgGpa, totalCredits, totalLectureHours, totalLabHours, isLoading }
 })
