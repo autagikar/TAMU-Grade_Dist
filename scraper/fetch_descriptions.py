@@ -72,13 +72,17 @@ def get_prefixes(cur):
 
 
 def parse_credits(text):
-    m = re.search(r'(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)\s*Credit', text, re.IGNORECASE)
-    return m.group(1).strip() if m else None
+    # "Credits 3" or "Credit Hours 3" (number after the word — TAMU catalog style)
+    m = re.search(r'Credits?\s+(\d+(?:\.\d+)?)', text, re.IGNORECASE)
+    if not m:
+        # Fallback: "3 Credits" or "3 Credit Hours"
+        m = re.search(r'(\d+(?:\.\d+)?)\s+Credits?', text, re.IGNORECASE)
+    return float(m.group(1)) if m else None
 
 
 def parse_hours(label, text):
     m = re.search(rf'(\d+(?:\.\d+)?)\s*{label}\s*Hour', text, re.IGNORECASE)
-    return m.group(1).strip() if m else None
+    return int(float(m.group(1))) if m else None
 
 
 def scrape_prefix(prefix):
@@ -119,22 +123,30 @@ def scrape_prefix(prefix):
             after_code = title_text[code_match.end():].strip().lstrip(".")
             title_only = re.split(r'\.\s*\d', after_code)[0].strip().strip(".")
 
-            credits       = parse_credits(title_text)
-            lecture_hours = parse_hours("Lecture", title_text)
-            lab_hours     = parse_hours("Lab(?:oratory)?", title_text)
-
-            # Description: first .courseblockdesc paragraph
+            # The TAMU catalog puts credits, hours, description, and prerequisites
+            # all in one .courseblockdesc paragraph, so we parse everything from there.
             desc_el = block.select_one(".courseblockdesc")
-            description = desc_el.get_text(" ", strip=True) if desc_el else None
+            full_text = desc_el.get_text(" ", strip=True) if desc_el else ""
 
-            # Prerequisites: any .courseblockextra paragraph that starts with "Prerequisite"
-            prerequisites = None
-            for extra in block.select(".courseblockextra"):
-                t = extra.get_text(" ", strip=True)
-                if re.match(r'Prerequisite', t, re.IGNORECASE):
-                    # Strip the leading label
-                    prerequisites = re.sub(r'^Prerequisite[s]?\s*:\s*', '', t, flags=re.IGNORECASE).strip()
-                    break
+            # Try title first, fall back to description blob
+            credits       = parse_credits(title_text) or parse_credits(full_text)
+            lecture_hours = parse_hours("Lecture", title_text) or parse_hours("Lecture", full_text)
+            lab_hours     = parse_hours("Lab(?:oratory)?", title_text) or parse_hours("Lab(?:oratory)?", full_text)
+
+            # Extract prerequisites — everything after the last "Prerequisite(s):" marker
+            prereq_match = re.search(r'Prerequisite[s]?\s*:\s*(.+)', full_text, re.IGNORECASE)
+            prerequisites = prereq_match.group(1).strip().rstrip('.') if prereq_match else None
+
+            # Clean description: strip the leading "Credits N. N Lecture Hours. N Lab Hours."
+            # header and the trailing "Prerequisite: ..." sentence so only the body remains.
+            description = full_text
+            if prereq_match:
+                description = full_text[:prereq_match.start()].strip()
+            description = re.sub(
+                r'^(?:Credits?\s*\d+(?:\.\d+)?\s*\.\s*)?'
+                r'(?:\d+(?:\.\d+)?\s*(?:Lecture|Lab(?:oratory)?)\s*Hours?\s*\.\s*)*',
+                '', description, flags=re.IGNORECASE,
+            ).strip() or None
 
             # Graduate catalog may already have the course; don't overwrite with a
             # worse/duplicate record if the undergrad entry came first.
