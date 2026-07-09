@@ -37,9 +37,9 @@ CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS course_descriptions (
     course_code   TEXT PRIMARY KEY,
     title         TEXT,
-    credits       TEXT,
-    lecture_hours TEXT,
-    lab_hours     TEXT,
+    credits       NUMERIC(4,1),
+    lecture_hours SMALLINT,
+    lab_hours     SMALLINT,
     description   TEXT,
     prerequisites TEXT
 );

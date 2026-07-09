@@ -4,11 +4,29 @@
 
 <script setup>
 import { RouterLink, useRoute } from 'vue-router'
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useThemeStore } from '@/stores/theme.js'
 
 const route = useRoute()
 const theme = useThemeStore()
+
+// Touch devices can't hover, so tapping a tab toggles its dropdown open.
+// Tracks which dropdown is open ('courses' | 'professors' | null).
+const openMenu = ref(null)
+
+function toggleMenu(name) {
+  openMenu.value = openMenu.value === name ? null : name
+}
+
+// Close the open dropdown after navigating or when tapping outside the navbar
+watch(() => route.path, () => (openMenu.value = null))
+
+function handleOutsideClick(e) {
+  if (!e.target.closest('.nav-group')) openMenu.value = null
+}
+
+onMounted(() => document.addEventListener('click', handleOutsideClick))
+onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
 
 // Mark the Courses tab as active when on any course-related page
 const coursesActive = computed(() => ['/', '/compare', '/course-rankings'].includes(route.path))
@@ -23,8 +41,8 @@ const myCoursesActive = computed(() => route.path === '/my-courses')
 <template>
   <nav class="navbar">
     <!-- Courses dropdown: Course Search + Compare Courses -->
-    <div class="nav-group" :class="{ active: coursesActive }">
-      <span class="nav-tab">Courses</span>
+    <div class="nav-group" :class="{ active: coursesActive, open: openMenu === 'courses' }">
+      <button type="button" class="nav-tab" @click="toggleMenu('courses')">Courses</button>
       <div class="dropdown">
         <RouterLink to="/" class="dropdown-link">Course Search</RouterLink>
         <RouterLink to="/compare" class="dropdown-link">Compare Courses</RouterLink>
@@ -33,8 +51,8 @@ const myCoursesActive = computed(() => route.path === '/my-courses')
     </div>
 
     <!-- Professors dropdown: Professor Lookup + Compare Professors -->
-    <div class="nav-group" :class="{ active: professorsActive }">
-      <span class="nav-tab">Professors</span>
+    <div class="nav-group" :class="{ active: professorsActive, open: openMenu === 'professors' }">
+      <button type="button" class="nav-tab" @click="toggleMenu('professors')">Professors</button>
       <div class="dropdown">
         <RouterLink to="/professor" class="dropdown-link">Professor Lookup</RouterLink>
         <RouterLink to="/compare-professor" class="dropdown-link">Compare Professors</RouterLink>
@@ -89,11 +107,14 @@ const myCoursesActive = computed(() => route.path === '/my-courses')
 }
 
 .nav-tab {
+  background: transparent;
+  border: none;
+  font-family: inherit;
   color: rgba(255, 255, 255, 0.75);
   padding: 12px 18px;
   font-size: 0.95rem;
   font-weight: 500;
-  cursor: default;
+  cursor: pointer;
   border-bottom: 3px solid transparent;
   transition: color 0.15s, border-color 0.15s;
   display: flex;
@@ -152,7 +173,14 @@ const myCoursesActive = computed(() => route.path === '/my-courses')
   flex-direction: column;
 }
 
-.nav-group:hover .dropdown {
+/* Hover-open only on devices with a real pointer; touch devices use tap-to-toggle */
+@media (hover: hover) {
+  .nav-group:hover .dropdown {
+    display: flex;
+  }
+}
+
+.nav-group.open .dropdown {
   display: flex;
 }
 
